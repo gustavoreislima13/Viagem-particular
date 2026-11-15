@@ -569,7 +569,6 @@ export const api = {
     const settings = await fetchSettingsInternal();
     return {
       settings,
-      mapsBrowserKey: '',
       adminEmail: STRICT_ADMIN_EMAIL,
     };
   },

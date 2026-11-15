@@ -4,30 +4,29 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
 
-// Case A Google Maps Demo Key Quota Defense: register BEFORE React mounts
-declare global {
-  interface Window {
-    gm_authFailure?: () => void;
-    __GMP_QUOTA_EXCEEDED?: boolean;
-  }
-}
+import { mapGoogleMapsErrorMessage, reportGoogleMapsError } from './lib/googleMaps.ts';
 
 window.gm_authFailure = () => {
-  window.__GMP_QUOTA_EXCEEDED = true;
-  window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+  reportGoogleMapsError(
+    'Erro de autenticação na chave Google Maps (gm_authFailure: verifique restrições de domínio/faturamento)'
+  );
 };
+
+const GMP_ERROR_TOKENS = [
+  'OverQuotaMapError',
+  'QuotaExceededError',
+  'InvalidKeyMapError',
+  'RefererNotAllowedMapError',
+  'ApiNotActivatedMapError',
+  'BillingNotEnabledMapError',
+  'ApiTargetBlockedMapError',
+];
 
 const origErr = console.error;
 console.error = (...args: unknown[]) => {
-  if (
-    args.some(
-      (a) =>
-        typeof a === 'string' &&
-        (a.includes('OverQuotaMapError') || a.includes('QuotaExceededError'))
-    )
-  ) {
-    window.__GMP_QUOTA_EXCEEDED = true;
-    window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+  const joined = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
+  if (GMP_ERROR_TOKENS.some((tok) => joined.includes(tok))) {
+    reportGoogleMapsError(mapGoogleMapsErrorMessage(joined));
   }
   origErr.apply(console, args);
 };

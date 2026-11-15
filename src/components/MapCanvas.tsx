@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
-  APIProvider,
+  APILoadingStatus,
   AdvancedMarker,
   Map as GoogleMap,
   MapMouseEvent,
+  useApiLoadingStatus,
   useMap,
   useMapsLibrary,
 } from '@vis.gl/react-google-maps';
-import { Crosshair, Flag, MapPin, Navigation } from 'lucide-react';
+import { AlertCircle, Crosshair, Flag, MapPin, Navigation } from 'lucide-react';
+import {
+  GOOGLE_MAPS_MISSING_KEY_REASON,
+  reportGoogleMapsError,
+  useGoogleMapsError,
+} from '../lib/googleMaps.ts';
 import { GeoPlace, RouteMetrics } from '../types.ts';
 
 interface MapCanvasProps {
@@ -19,6 +25,24 @@ interface MapCanvasProps {
   pinDropMode: 'origin' | 'destination' | null;
   centerTrigger: number;
   onMapClickPin: (lat: number, lng: number) => void;
+}
+
+function GoogleMapsStatusWatcher() {
+  const status = useApiLoadingStatus();
+
+  useEffect(() => {
+    if (status === APILoadingStatus.AUTH_FAILURE) {
+      reportGoogleMapsError(
+        'Erro de autenticação na chave Google Maps (verifique restrições HTTP referrer e faturamento)'
+      );
+    } else if (status === APILoadingStatus.FAILED) {
+      reportGoogleMapsError(
+        'Falha ao carregar o script da Google Maps JavaScript API'
+      );
+    }
+  }, [status]);
+
+  return null;
 }
 
 function TrafficLayerOverlay({ enabled }: { enabled: boolean }) {
@@ -65,6 +89,7 @@ function RoutePolylineAndBounds({
   const map = useMap();
   const mapsLib = useMapsLibrary('maps');
   const coreLib = useMapsLibrary('core');
+  const geometryLib = useMapsLibrary('geometry');
   const polyRef = useRef<{ setMap: (m: any) => void } | null>(null);
 
   useEffect(() => {
@@ -78,20 +103,29 @@ function RoutePolylineAndBounds({
     const PolylineCtor = (mapsLib as any).Polyline;
     const LatLngBoundsCtor = (coreLib as any).LatLngBounds;
 
-    if (route?.coords && route.coords.length >= 2 && PolylineCtor) {
+    let pathPoints: google.maps.LatLngLiteral[] = [];
+    if (route?.coords && route.coords.length >= 2) {
+      pathPoints = route.coords.map(([lat, lng]) => ({ lat, lng }));
+    } else if (route?.encodedPolyline && geometryLib?.encoding?.decodePath) {
+      pathPoints = geometryLib.encoding
+        .decodePath(route.encodedPolyline)
+        .map((pt: google.maps.LatLng) => ({ lat: pt.lat(), lng: pt.lng() }));
+    }
+
+    if (pathPoints.length >= 2 && PolylineCtor) {
       polyRef.current = new PolylineCtor({
-        path: route.coords.map(([lat, lng]) => ({ lat, lng })),
+        path: pathPoints,
         geodesic: true,
         strokeColor: '#10B981',
-        strokeOpacity: 0.92,
+        strokeOpacity: 0.94,
         strokeWeight: 5,
       });
       polyRef.current?.setMap(map);
 
       if (LatLngBoundsCtor) {
         const bounds = new LatLngBoundsCtor();
-        for (const [lat, lng] of route.coords) {
-          bounds.extend({ lat, lng });
+        for (const pt of pathPoints) {
+          bounds.extend(pt);
         }
         bounds.extend({ lat: origin.lat, lng: origin.lng });
         if (destination) bounds.extend({ lat: destination.lat, lng: destination.lng });
@@ -113,7 +147,7 @@ function RoutePolylineAndBounds({
         polyRef.current = null;
       }
     };
-  }, [map, mapsLib, coreLib, origin, destination, route, centerTrigger]);
+  }, [map, mapsLib, coreLib, geometryLib, origin, destination, route, centerTrigger]);
 
   return null;
 }
@@ -124,6 +158,7 @@ function TacticalFallbackMap({
   route,
   pinDropMode,
   showTraffic,
+  noticeReason,
   onMapClickPin,
 }: {
   origin: GeoPlace;
@@ -131,6 +166,7 @@ function TacticalFallbackMap({
   route: RouteMetrics | null;
   pinDropMode: 'origin' | 'destination' | null;
   showTraffic: boolean;
+  noticeReason: string;
   onMapClickPin: (lat: number, lng: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -182,16 +218,36 @@ function TacticalFallbackMap({
 
       {/* Simulated Traffic arteries if showTraffic */}
       {showTraffic && (
-        <svg className="absolute inset-0 w-full h-full opacity-35 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d="M 10 38 Q 48 44 88 32" stroke="#F59E0B" strokeWidth="0.45" fill="none" strokeDasharray="1.5 1" />
+        <svg
+          className="absolute inset-0 w-full h-full opacity-35 pointer-events-none"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M 10 38 Q 48 44 88 32"
+            stroke="#F59E0B"
+            strokeWidth="0.45"
+            fill="none"
+            strokeDasharray="1.5 1"
+          />
           <path d="M 22 18 Q 52 55 78 68" stroke="#10B981" strokeWidth="0.45" fill="none" />
-          <path d="M 15 62 Q 46 50 85 56" stroke="#EF4444" strokeWidth="0.35" fill="none" strokeDasharray="1 1" />
+          <path
+            d="M 15 62 Q 46 50 85 56"
+            stroke="#EF4444"
+            strokeWidth="0.35"
+            fill="none"
+            strokeDasharray="1 1"
+          />
         </svg>
       )}
 
       {/* Route Line SVG */}
       {dPos && (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
           <path
             d={`M ${oPos.x} ${oPos.y} Q ${(oPos.x + dPos.x) / 2} ${Math.min(oPos.y, dPos.y) - 9} ${dPos.x} ${dPos.y}`}
             stroke="#10B981"
@@ -230,11 +286,22 @@ function TacticalFallbackMap({
         </div>
       )}
 
-      {route && Number.isFinite(Number(route.distanceKm)) && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-slate-900/85 border border-white/10 text-[11px] text-slate-300 tabular-nums pointer-events-none">
-          {Number(route.distanceKm).toFixed(1)} km · {Number(route.durationInTrafficMin || 15)} min estimados
+      {/* Discreet status & route summary overlays */}
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 pointer-events-none w-[90vw] max-w-md">
+        <div
+          role="status"
+          className="px-3 py-1.5 rounded-xl bg-slate-900/85 backdrop-blur-md border border-amber-500/30 text-[11px] leading-snug text-amber-200/90 flex items-center gap-1.5 shadow-lg text-center"
+        >
+          <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span>Mapa visual indisponível: {noticeReason}</span>
         </div>
-      )}
+
+        {route && Number.isFinite(Number(route.distanceKm)) && (
+          <div className="px-3 py-1 rounded-lg bg-slate-900/85 border border-white/10 text-[11px] text-slate-300 tabular-nums">
+            {Number(route.distanceKm).toFixed(1)} km · {Number(route.durationInTrafficMin || 15)} min estimados
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -249,17 +316,9 @@ export function MapCanvas({
   centerTrigger,
   onMapClickPin,
 }: MapCanvasProps) {
-  const [mapsQuotaOrAuthError, setMapsQuotaOrAuthError] = useState(() =>
-    Boolean(window.__GMP_QUOTA_EXCEEDED)
-  );
-
-  useEffect(() => {
-    const onQuota = () => setMapsQuotaOrAuthError(true);
-    window.addEventListener('gmp-quota-exceeded', onQuota);
-    return () => window.removeEventListener('gmp-quota-exceeded', onQuota);
-  }, []);
-
-  const canUseGoogleMaps = Boolean(apiKey) && !mapsQuotaOrAuthError;
+  const mapsError = useGoogleMapsError();
+  const canUseGoogleMaps = Boolean(apiKey) && !mapsError;
+  const fallbackReason = mapsError || GOOGLE_MAPS_MISSING_KEY_REASON;
 
   const handleGoogleMapClick = (event: MapMouseEvent) => {
     if (!pinDropMode || !event.detail?.latLng) return;
@@ -275,10 +334,11 @@ export function MapCanvas({
           route={route}
           pinDropMode={pinDropMode}
           showTraffic={showTraffic}
+          noticeReason={fallbackReason}
           onMapClickPin={onMapClickPin}
         />
         {pinDropMode && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-emeraldVip text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 pointer-events-none">
+          <div className="absolute top-36 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-emeraldVip text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 pointer-events-none">
             <Crosshair className="w-4 h-4" />
             Toque no mapa para definir {pinDropMode === 'origin' ? 'o Embarque' : 'o Destino'}
           </div>
@@ -289,54 +349,53 @@ export function MapCanvas({
 
   return (
     <div className={`absolute inset-0 z-0 ${pinDropMode ? 'cursor-crosshair' : ''}`}>
-      <APIProvider apiKey={apiKey} language="pt-BR" region="BR">
-        <GoogleMap
-          defaultCenter={{ lat: origin.lat, lng: origin.lng }}
-          defaultZoom={13}
-          mapId="DEMO_MAP_ID"
-          colorScheme="DARK"
-          disableDefaultUI
-          gestureHandling="greedy"
-          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-          onClick={handleGoogleMapClick}
-          className="w-full h-full"
-        >
-          <TrafficLayerOverlay enabled={showTraffic} />
-          <RoutePolylineAndBounds
-            origin={origin}
-            destination={destination}
-            route={route}
-            centerTrigger={centerTrigger}
-          />
+      <GoogleMapsStatusWatcher />
+      <GoogleMap
+        defaultCenter={{ lat: origin.lat, lng: origin.lng }}
+        defaultZoom={13}
+        mapId="DEMO_MAP_ID"
+        colorScheme="DARK"
+        disableDefaultUI
+        gestureHandling="greedy"
+        internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+        onClick={handleGoogleMapClick}
+        className="w-full h-full"
+      >
+        <TrafficLayerOverlay enabled={showTraffic} />
+        <RoutePolylineAndBounds
+          origin={origin}
+          destination={destination}
+          route={route}
+          centerTrigger={centerTrigger}
+        />
 
-          <AdvancedMarker position={{ lat: origin.lat, lng: origin.lng }} title={origin.name}>
+        <AdvancedMarker position={{ lat: origin.lat, lng: origin.lng }} title={origin.name}>
+          <div className="flex flex-col items-center">
+            <div className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-emeraldVip/50 text-[10px] font-semibold text-white mb-1 whitespace-nowrap shadow-md">
+              Embarque
+            </div>
+            <div className="w-8 h-8 rounded-full bg-emeraldVip text-slate-950 flex items-center justify-center border-2 border-white shadow-[0_0_20px_rgba(16,185,129,0.7)]">
+              <MapPin className="w-4 h-4 fill-current" />
+            </div>
+          </div>
+        </AdvancedMarker>
+
+        {destination && (
+          <AdvancedMarker
+            position={{ lat: destination.lat, lng: destination.lng }}
+            title={destination.name}
+          >
             <div className="flex flex-col items-center">
-              <div className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-emeraldVip/50 text-[10px] font-semibold text-white mb-1 whitespace-nowrap shadow-md">
-                Embarque
+              <div className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-goldVip/50 text-[10px] font-semibold text-white mb-1 whitespace-nowrap shadow-md">
+                Destino
               </div>
-              <div className="w-8 h-8 rounded-full bg-emeraldVip text-slate-950 flex items-center justify-center border-2 border-white shadow-[0_0_20px_rgba(16,185,129,0.7)]">
-                <MapPin className="w-4 h-4 fill-current" />
+              <div className="w-8 h-8 rounded-full bg-goldVip text-slate-950 flex items-center justify-center border-2 border-white shadow-[0_0_20px_rgba(245,158,11,0.7)]">
+                <Flag className="w-4 h-4 fill-current" />
               </div>
             </div>
           </AdvancedMarker>
-
-          {destination && (
-            <AdvancedMarker
-              position={{ lat: destination.lat, lng: destination.lng }}
-              title={destination.name}
-            >
-              <div className="flex flex-col items-center">
-                <div className="px-2 py-0.5 rounded-md bg-slate-950/90 border border-goldVip/50 text-[10px] font-semibold text-white mb-1 whitespace-nowrap shadow-md">
-                  Destino
-                </div>
-                <div className="w-8 h-8 rounded-full bg-goldVip text-slate-950 flex items-center justify-center border-2 border-white shadow-[0_0_20px_rgba(245,158,11,0.7)]">
-                  <Flag className="w-4 h-4 fill-current" />
-                </div>
-              </div>
-            </AdvancedMarker>
-          )}
-        </GoogleMap>
-      </APIProvider>
+        )}
+      </GoogleMap>
 
       {pinDropMode && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-emeraldVip text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 pointer-events-none">

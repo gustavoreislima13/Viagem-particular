@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -48,6 +49,11 @@ import {
   where,
 } from './lib/firebase.ts';
 import {
+  GOOGLE_MAPS_API_KEY,
+  reportGoogleMapsError,
+  useGoogleMapsError,
+} from './lib/googleMaps.ts';
+import {
   CURATED_SP_HUBS,
   LATE_CANCEL_PENALTY,
   OFFICIAL_PIX_KEY,
@@ -81,7 +87,6 @@ import {
   formatKmPtBr,
   formatSpTime,
 } from './utils/schedule.ts';
-import { QuotaBanner } from './components/QuotaBanner.tsx';
 import { MapCanvas } from './components/MapCanvas.tsx';
 import { LocationSearchModal } from './components/LocationSearchModal.tsx';
 import { SuccessModal } from './components/SuccessModal.tsx';
@@ -111,15 +116,157 @@ const DEFAULT_SETTINGS: AppSettings = {
   whatsapp: DEFAULT_DRIVER_WHATSAPP,
 };
 
-export default function App() {
+function GoogleRouteSync({
+  origin,
+  destination,
+  mapsError,
+  onComputingChange,
+  onRouteResolved,
+}: {
+  origin: GeoPlace;
+  destination: GeoPlace | null;
+  mapsError: string | null;
+  onComputingChange: (loading: boolean) => void;
+  onRouteResolved: (route: RouteMetrics | null, advanceStep: boolean) => void;
+}) {
+  const routesLib = useMapsLibrary('routes');
+
+  useEffect(() => {
+    if (!destination) {
+      onRouteResolved(null, false);
+      onComputingChange(false);
+      return;
+    }
+
+    let cancelled = false;
+    onComputingChange(true);
+
+    const runFallback = async () => {
+      try {
+        const res = await api.computeRoute(
+          origin.lat,
+          origin.lng,
+          destination.lat,
+          destination.lng
+        );
+        if (!cancelled) {
+          onRouteResolved(res, true);
+        }
+      } catch (err) {
+        console.error('Fallback route error:', err);
+      } finally {
+        if (!cancelled) onComputingChange(false);
+      }
+    };
+
+    const runGoogleRoutes = async () => {
+      if (!routesLib || mapsError || !routesLib.Route?.computeRoutes) {
+        await runFallback();
+        return;
+      }
+
+      try {
+        const res = await routesLib.Route.computeRoutes({
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: { lat: destination.lat, lng: destination.lng },
+          travelMode: 'DRIVING',
+          routingPreference: 'TRAFFIC_AWARE',
+          fields: [
+            'path',
+            'distanceMeters',
+            'durationMillis',
+            'staticDurationMillis',
+            'viewport',
+          ],
+          internalUsageAttributionIds: ['gmp_mcp_codeassist_v1_aistudio'],
+        });
+
+        const primaryRoute = res.routes?.[0];
+        if (!primaryRoute) {
+          await runFallback();
+          return;
+        }
+
+        let coords: [number, number][] = [];
+        if (primaryRoute.path && primaryRoute.path.length > 0) {
+          coords = primaryRoute.path
+            .map((pt: any): [number, number] => {
+              const lat = typeof pt.lat === 'function' ? pt.lat() : Number(pt.lat);
+              const lng = typeof pt.lng === 'function' ? pt.lng() : Number(pt.lng);
+              return [lat, lng];
+            })
+            .filter(([lat, lng]: [number, number]) => Number.isFinite(lat) && Number.isFinite(lng));
+        } else if (typeof primaryRoute.createPolylines === 'function') {
+          const polylines = primaryRoute.createPolylines();
+          for (const pl of polylines) {
+            const pathArr = pl.getPath()?.getArray() || [];
+            for (const pt of pathArr) {
+              coords.push([pt.lat(), pt.lng()]);
+            }
+          }
+        }
+
+        const distanceKm = Math.max(
+          0.5,
+          Number(((primaryRoute.distanceMeters || 0) / 1000).toFixed(2))
+        );
+        const durationInTrafficMin = Math.max(
+          1,
+          Math.round((primaryRoute.durationMillis || 0) / 60000)
+        );
+        const durationMin = Math.max(
+          1,
+          Math.round(
+            (primaryRoute.staticDurationMillis || primaryRoute.durationMillis || 0) / 60000
+          )
+        );
+        const trafficDeltaMin = Math.max(0, durationInTrafficMin - durationMin);
+
+        if (!cancelled) {
+          onRouteResolved(
+            {
+              distanceKm,
+              durationMin,
+              durationInTrafficMin,
+              trafficDeltaMin,
+              coords:
+                coords.length >= 2
+                  ? coords
+                  : [
+                      [origin.lat, origin.lng],
+                      [destination.lat, destination.lng],
+                    ],
+              source: 'routes-api-v2',
+            },
+            true
+          );
+          onComputingChange(false);
+        }
+      } catch (err) {
+        console.warn('Google Routes API fallback triggered:', err);
+        await runFallback();
+      }
+    };
+
+    runGoogleRoutes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routesLib, mapsError, origin, destination, onComputingChange, onRouteResolved]);
+
+  return null;
+}
+
+function AppContent({ hasApiProvider }: { hasApiProvider: boolean }) {
   // System & Auth state
+  const mapsError = useGoogleMapsError();
   const [authLoading, setAuthLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<ParsedFirebaseError | null>(firebaseConfigError);
   const [profileSyncNotice, setProfileSyncNotice] = useState<ParsedFirebaseError | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [mapsBrowserKey, setMapsBrowserKey] = useState('');
   const [firestoreQuotaUrl, setFirestoreQuotaUrl] = useState<string | null>(null);
 
   // Map & Route state
@@ -191,7 +338,6 @@ export default function App() {
       .getPublicConfig()
       .then((cfg) => {
         if (cfg.settings) setSettings(cfg.settings);
-        if (cfg.mapsBrowserKey) setMapsBrowserKey(cfg.mapsBrowserKey);
       })
       .catch((err) => console.warn('Could not fetch public config:', err));
 
@@ -383,8 +529,17 @@ export default function App() {
     return () => unsub();
   }, [user, isStrictAdmin]);
 
-  // Compute route whenever origin and destination update
+  const handleRouteResolved = useCallback((resolved: RouteMetrics | null, advanceStep: boolean) => {
+    setRoute(resolved);
+    if (resolved && advanceStep) {
+      setSheetStep(2);
+    }
+  }, []);
+
+  // Fallback route computation when APIProvider is absent (VITE_GOOGLE_MAPS_API_KEY not configured)
   useEffect(() => {
+    if (hasApiProvider) return;
+
     if (!destination) {
       setRoute(null);
       return;
@@ -408,7 +563,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [origin, destination]);
+  }, [hasApiProvider, origin, destination]);
 
   const selectedDurationMin = Math.max(
     1,
@@ -857,7 +1012,6 @@ export default function App() {
     return (
       <div className="min-h-screen w-full bg-obsidian flex items-center justify-center p-5 relative overflow-y-auto">
         <OfflineIndicator />
-        <QuotaBanner />
         <div className="glass-panel max-w-md w-full rounded-3xl p-7 shadow-2xl border border-white/10">
           <div className="flex flex-col items-center text-center mb-7">
             <div className="w-16 h-16 rounded-2xl bg-emeraldVip/15 border border-emeraldVip/30 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(16,185,129,0.22)] text-emeraldVip">
@@ -938,7 +1092,15 @@ export default function App() {
   return (
     <div className="relative w-full h-full bg-obsidian overflow-hidden">
       <OfflineIndicator />
-      <QuotaBanner />
+      {hasApiProvider && (
+        <GoogleRouteSync
+          origin={origin}
+          destination={destination}
+          mapsError={mapsError}
+          onComputingChange={setComputingRoute}
+          onRouteResolved={handleRouteResolved}
+        />
+      )}
 
       {firestoreQuotaUrl && (
         <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[450] bg-amber-950/95 border border-amber-500/40 px-4 py-2 rounded-xl text-xs text-amber-100 shadow-xl">
@@ -1237,7 +1399,7 @@ export default function App() {
 
       {/* FULLSCREEN MAP CANVAS */}
       <MapCanvas
-        apiKey={mapsBrowserKey}
+        apiKey={GOOGLE_MAPS_API_KEY}
         origin={origin}
         destination={destination}
         route={route}
@@ -2052,5 +2214,23 @@ export default function App() {
         }}
       />
     </div>
+  );
+}
+
+export default function App() {
+  if (!GOOGLE_MAPS_API_KEY) {
+    return <AppContent hasApiProvider={false} />;
+  }
+
+  return (
+    <APIProvider
+      apiKey={GOOGLE_MAPS_API_KEY}
+      libraries={['places', 'geometry', 'routes']}
+      language="pt-BR"
+      region="BR"
+      onError={reportGoogleMapsError}
+    >
+      <AppContent hasApiProvider={true} />
+    </APIProvider>
   );
 }
