@@ -23,58 +23,27 @@ import {
   orderBy,
   onSnapshot,
 } from 'firebase/firestore';
-import appletFirebaseConfig from '../../firebase-applet-config.json';
+import firebaseConfig from '../../firebase-applet-config.json';
 
-const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
-
-export const firebaseConfig = {
-  apiKey: (env.VITE_FIREBASE_API_KEY || appletFirebaseConfig.apiKey || '').trim(),
-  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN || appletFirebaseConfig.authDomain || '').trim(),
-  projectId: (env.VITE_FIREBASE_PROJECT_ID || appletFirebaseConfig.projectId || '').trim(),
-  appId: (env.VITE_FIREBASE_APP_ID || appletFirebaseConfig.appId || '').trim(),
-  firestoreDatabaseId: (
-    env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
-    appletFirebaseConfig.firestoreDatabaseId ||
-    ''
-  ).trim(),
-  storageBucket: (
-    env.VITE_FIREBASE_STORAGE_BUCKET ||
-    appletFirebaseConfig.storageBucket ||
-    ''
-  ).trim(),
-  messagingSenderId: (
-    env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
-    appletFirebaseConfig.messagingSenderId ||
-    ''
-  ).trim(),
-};
+export { firebaseConfig };
 
 const missingKeys = (['apiKey', 'authDomain', 'projectId', 'appId'] as const).filter(
-  (key) => !firebaseConfig[key]
+  (key) => !String(firebaseConfig[key] || '').trim()
 );
 
 export const firebaseConfigError: { code: string; message: string; formatted: string } | null =
   missingKeys.length > 0
     ? {
         code: 'firebase/missing-config',
-        message: `Configuração Firebase incompleta (${missingKeys.join(', ')}). Verifique firebase-applet-config.json ou variáveis VITE_FIREBASE_*.`,
-        formatted: `firebase/missing-config: Configuração Firebase incompleta (${missingKeys.join(', ')}).`,
+        message: `Configuração Firebase incompleta (${missingKeys.join(', ')}) em firebase-applet-config.json.`,
+        formatted: `firebase/missing-config: Configuração Firebase incompleta (${missingKeys.join(', ')}) em firebase-applet-config.json.`,
       }
     : null;
 
 export const app: FirebaseApp =
-  getApps().length > 0
-    ? getApp()
-    : initializeApp({
-        apiKey: firebaseConfig.apiKey,
-        authDomain: firebaseConfig.authDomain,
-        projectId: firebaseConfig.projectId,
-        appId: firebaseConfig.appId,
-        storageBucket: firebaseConfig.storageBucket || undefined,
-        messagingSenderId: firebaseConfig.messagingSenderId || undefined,
-      });
+  getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// CRITICAL: Use the provisioned database ID from firebase-applet-config.json when defined
+// CRITICAL: Use the provisioned database ID directly from firebase-applet-config.json
 export const db = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
