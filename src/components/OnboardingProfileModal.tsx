@@ -17,10 +17,8 @@ import {
   db,
   doc,
   formatFirebaseError,
-  getDoc,
   serverTimestamp,
   setDoc,
-  updateDoc,
 } from '../lib/firebase.ts';
 import { api, formatCurrency } from '../services/api.ts';
 import { UserProfile } from '../types.ts';
@@ -70,72 +68,6 @@ export function OnboardingProfileModal({
   const cpfReady = cpfDigits.length === 11;
   const cpfValid = cpfReady ? isValidCpf(cpf) : false;
 
-  const saveDirectToFirestoreFallback = async (): Promise<UserProfile> => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      throw new Error('Sessão Google expirada. Faça login novamente.');
-    }
-
-    const cleanName = name.trim().slice(0, 120);
-    const cleanPhone = phone.trim().slice(0, 40);
-    const cleanAddress = address.trim().slice(0, 280);
-    const cleanCpf = cpf.trim().slice(0, 20);
-    const publicRef = doc(db, 'users', currentUser.uid);
-    const privateRef = doc(db, 'users', currentUser.uid, 'private', 'info');
-
-    const pubSnap = await getDoc(publicRef);
-    if (!pubSnap.exists()) {
-      await setDoc(publicRef, {
-        uid: currentUser.uid,
-        displayName: cleanName,
-        points: 100,
-        tier: 'Bronze',
-        vipActive: false,
-        walletBalance: 0,
-        pendingPenalty: 0,
-        profileCompleted: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await updateDoc(publicRef, {
-        displayName: cleanName,
-        profileCompleted: true,
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    const privSnap = await getDoc(privateRef);
-    if (!privSnap.exists()) {
-      await setDoc(privateRef, {
-        uid: currentUser.uid,
-        email: (currentUser.email || user.email || 'vip@gustavoreis.app').trim().slice(0, 160),
-        phone: cleanPhone,
-        address: cleanAddress,
-        cpf: cleanCpf,
-        photoURL: (currentUser.photoURL || user.photoUrl || '').slice(0, 500),
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await updateDoc(privateRef, {
-        phone: cleanPhone,
-        address: cleanAddress,
-        cpf: cleanCpf,
-        photoURL: (currentUser.photoURL || user.photoUrl || '').slice(0, 500),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    return {
-      ...user,
-      name: cleanName,
-      phone: cleanPhone,
-      address: cleanAddress,
-      cpf: cleanCpf,
-      profileCompleted: true,
-    };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -159,31 +91,69 @@ export function OnboardingProfileModal({
 
     setSaving(true);
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('Sessão Google expirada. Faça login novamente.');
+      }
+
+      const cleanName = name.trim().slice(0, 120);
+      const cleanPhone = phone.trim().slice(0, 40);
+      const cleanAddress = address.trim().slice(0, 280);
+      const cleanCpf = cpf.trim().slice(0, 20);
+      const cleanEmail = (currentUser.email || user.email || 'vip@gustavoreis.app')
+        .trim()
+        .slice(0, 160);
+      const cleanPhoto = (currentUser.photoURL || user.photoUrl || '').slice(0, 500);
+
       let updatedUser: UserProfile;
-      try {
+
+      if (mode === 'onboarding') {
+        const dados = {
+          uid: currentUser.uid,
+          name: cleanName,
+          displayName: cleanName,
+          email: cleanEmail,
+          phone: cleanPhone,
+          address: cleanAddress,
+          cpf: cleanCpf,
+          photoUrl: cleanPhoto,
+          photoURL: cleanPhoto,
+          profileCompleted: true,
+          vipActive: false,
+          pendingPenalty: 0,
+          updatedAt: serverTimestamp(),
+        };
+
+        await setDoc(
+          doc(db, 'users', currentUser.uid),
+          { ...dados, isVip: false, walletBalance: 0, points: 0 },
+          { merge: true }
+        );
+
+        updatedUser = {
+          ...user,
+          uid: currentUser.uid,
+          name: cleanName,
+          email: cleanEmail,
+          phone: cleanPhone,
+          address: cleanAddress,
+          cpf: cleanCpf,
+          photoUrl: cleanPhoto,
+          profileCompleted: true,
+          vipActive: false,
+          walletBalance: 0,
+          pendingPenalty: 0,
+          points: 0,
+          tier: 'Bronze',
+        };
+      } else {
         const res = await api.updateProfile({
-          name: name.trim(),
-          phone,
-          address: address.trim(),
-          cpf,
+          name: cleanName,
+          phone: cleanPhone,
+          address: cleanAddress,
+          cpf: cleanCpf,
         });
         updatedUser = res.user;
-      } catch (apiErr: any) {
-        const status = Number(apiErr?.status || 0);
-        const msg = String(apiErr?.message || '');
-        const isBackendUnavailable =
-          status === 404 ||
-          status === 405 ||
-          status === 502 ||
-          status === 503 ||
-          status === 504 ||
-          msg.includes('JSON inválido') ||
-          msg.includes('Failed to fetch');
-
-        if (!isBackendUnavailable) {
-          throw apiErr;
-        }
-        updatedUser = await saveDirectToFirestoreFallback();
       }
 
       onProfileSaved(updatedUser);

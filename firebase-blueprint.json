@@ -2,7 +2,7 @@
   "entities": {
     "UserPublic": {
       "title": "UserPublic",
-      "description": "Public-safe passenger profile, VIP subscription status, and loyalty points metadata.",
+      "description": "Passenger profile, VIP subscription status, digital wallet balance, and loyalty points.",
       "type": "object",
       "properties": {
         "uid": {
@@ -10,10 +10,39 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
         "displayName": {
           "type": "string",
           "minLength": 1,
           "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "cpf": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
         },
         "points": {
           "type": "integer"
@@ -30,6 +59,10 @@
         },
         "isVip": {
           "type": "boolean"
+        },
+        "vipSubscribedAt": {
+          "type": "string",
+          "maxLength": 40
         },
         "vipExpiresAt": {
           "type": "string",
@@ -60,7 +93,7 @@
           "format": "date-time"
         }
       },
-      "required": ["uid", "displayName", "points", "tier", "createdAt", "updatedAt"]
+      "required": ["uid", "updatedAt"]
     },
     "UserPrivate": {
       "title": "UserPrivate",
@@ -106,6 +139,110 @@
       },
       "required": ["uid", "email", "updatedAt"]
     },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "Digital wallet movement history (topups, ride deductions, penalties, refunds, admin adjustments).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["recarga", "corrida", "multa", "ajuste_admin", "estorno"]
+        },
+        "amount": {
+          "type": "number"
+        },
+        "balanceAfter": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "referenceCode": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "type", "amount", "balanceAfter", "description", "createdAt"]
+    },
+    "ScheduleSlot": {
+      "title": "ScheduleSlot",
+      "description": "Non-PII occupied schedule windows for rides and driver manual blocks used for conflict detection.",
+      "type": "object",
+      "properties": {
+        "slotId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": ["ride", "manual_block"]
+        },
+        "referenceCode": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "returnDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "startTimeIso": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "endTimeIso": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "returnStartTimeIso": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "returnEndTimeIso": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "startTimeStr": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "endTimeStr": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["slotId", "userId", "sourceType", "date", "startTimeIso", "endTimeIso", "active", "updatedAt"]
+    },
     "Ride": {
       "title": "Ride",
       "description": "Scheduled or completed private mobility ride with optional VIP recurrence and preferences.",
@@ -125,13 +262,41 @@
           "type": "string",
           "maxLength": 120
         },
+        "clientEmail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "clientPhone": {
+          "type": "string",
+          "maxLength": 40
+        },
         "originName": {
           "type": "string",
           "maxLength": 180
         },
+        "originAddress": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "originLat": {
+          "type": "number"
+        },
+        "originLng": {
+          "type": "number"
+        },
         "destinationName": {
           "type": "string",
           "maxLength": 180
+        },
+        "destinationAddress": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "destinationLat": {
+          "type": "number"
+        },
+        "destinationLng": {
+          "type": "number"
         },
         "distanceKm": {
           "type": "number"
@@ -182,6 +347,22 @@
         "returnTime": {
           "type": "string",
           "maxLength": 10
+        },
+        "startTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "endTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "returnStartTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "returnEndTime": {
+          "type": "string",
+          "maxLength": 40
         },
         "price": {
           "type": "number"
@@ -270,6 +451,9 @@
           "type": "string",
           "maxLength": 20
         },
+        "odometerKm": {
+          "type": "integer"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -298,6 +482,9 @@
         },
         "discountValue": {
           "type": "number"
+        },
+        "pointsCost": {
+          "type": "integer"
         },
         "used": {
           "type": "boolean"
@@ -430,6 +617,14 @@
           "type": "string",
           "maxLength": 120
         },
+        "userEmail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "userPhone": {
+          "type": "string",
+          "maxLength": 40
+        },
         "amount": {
           "type": "number"
         },
@@ -440,6 +635,14 @@
         "status": {
           "type": "string",
           "enum": ["Pendente", "Aprovado", "Rejeitado"]
+        },
+        "adminNotes": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "reviewedAt": {
+          "type": "string",
+          "maxLength": 40
         },
         "createdAt": {
           "type": "string",
@@ -462,12 +665,28 @@
           "type": "string",
           "maxLength": 120
         },
+        "userEmail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "userPhone": {
+          "type": "string",
+          "maxLength": 40
+        },
         "amount": {
           "type": "number"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300
         },
         "status": {
           "type": "string",
           "enum": ["Pendente", "Aprovado", "Rejeitado"]
+        },
+        "reviewedAt": {
+          "type": "string",
+          "maxLength": 40
         },
         "createdAt": {
           "type": "string",
@@ -480,7 +699,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserPublic" },
-      "description": "Public-safe passenger VIP tier, subscription, wallet summary, and points."
+      "description": "Passenger profile, VIP tier, subscription, wallet summary, and points."
     },
     "/users/{userId}/private/{docId}": {
       "schema": { "$ref": "#/entities/UserPrivate" },
@@ -490,9 +709,17 @@
       "schema": { "$ref": "#/entities/Voucher" },
       "description": "Redeemed VIP discount vouchers belonging to userId."
     },
+    "/users/{userId}/walletTransactions/{txId}": {
+      "schema": { "$ref": "#/entities/WalletTransaction" },
+      "description": "Wallet ledger transactions belonging to userId."
+    },
     "/rides/{rideId}": {
       "schema": { "$ref": "#/entities/Ride" },
       "description": "Private mobility rides owned by userId and managed by admin."
+    },
+    "/scheduleSlots/{slotId}": {
+      "schema": { "$ref": "#/entities/ScheduleSlot" },
+      "description": "Non-PII occupied schedule windows for anti-conflict slot checking."
     },
     "/walletTopups/{topupId}": {
       "schema": { "$ref": "#/entities/WalletTopup" },

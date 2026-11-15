@@ -15,21 +15,12 @@ import {
   Ticket,
   X,
 } from 'lucide-react';
-import { doc } from 'firebase/firestore';
 import {
   VIP_CHECKOUT_URL,
   VIP_MONTHLY_PRICE,
   api,
   formatCurrency,
 } from '../services/api.ts';
-import {
-  OperationType,
-  auth,
-  db,
-  handleFirestoreError,
-  serverTimestamp,
-  setDoc,
-} from '../lib/firebase.ts';
 import { PartnerRaffle, UserProfile, VipPreferences, Voucher } from '../types.ts';
 
 interface VipClubModalProps {
@@ -141,23 +132,9 @@ export function VipClubModal({
     setSuccessMsg(null);
     setSubscribing(true);
     try {
-      const res = await api.requestVipActivation(
+      await api.requestVipActivation(
         `Solicitação enviada pelo app após checkout Mercado Pago (${VIP_CHECKOUT_URL})`
       );
-      if (auth.currentUser && res.vipRequest?.id) {
-        const docId = `VIPREQ-${res.vipRequest.id}`;
-        try {
-          await setDoc(doc(db, 'vipRequests', docId), {
-            userId: user.uid,
-            userName: (user.name || 'Passageiro VIP').slice(0, 120),
-            amount: VIP_MONTHLY_PRICE,
-            status: 'Pendente',
-            createdAt: serverTimestamp(),
-          });
-        } catch (fsErr) {
-          handleFirestoreError(fsErr, OperationType.CREATE, `vipRequests/${docId}`);
-        }
-      }
       setSuccessMsg(
         'Aviso de pagamento enviado! O motorista administrador validará sua assinatura Clube VIP em instantes.'
       );

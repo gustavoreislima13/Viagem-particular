@@ -32,26 +32,19 @@ import {
 } from 'lucide-react';
 import {
   FirebaseUser,
-  OperationType,
   ParsedFirebaseError,
   auth,
   collection,
   db,
-  doc,
   firebaseConfigError,
   formatFirebaseError,
-  getDoc,
-  handleFirestoreError,
   onAuthStateChanged,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
   signInWithGooglePopup,
   signOutFirebase,
   testFirestoreConnection,
-  updateDoc,
   where,
 } from './lib/firebase.ts';
 import {
@@ -211,268 +204,72 @@ export default function App() {
 
   const syncInFlightRef = useRef<Promise<void> | null>(null);
 
-  // Ensure Firestore public + split PII docs exist cleanly per 8-pillar rules
-  const ensureFirestoreUserDocs = useCallback(async (profile: UserProfile) => {
-    if (profile.isGuest || !auth.currentUser) return;
-    await auth.currentUser.getIdToken();
-
-    const publicPath = `users/${profile.uid}`;
-    const privatePath = `users/${profile.uid}/private/info`;
-    const safeDisplayName =
-      (profile.name || profile.email?.split('@')[0] || 'Passageiro VIP')
-        .trim()
-        .slice(0, 120) || 'Passageiro VIP';
-
-    const publicRef = doc(db, 'users', profile.uid);
-    let snap;
-    try {
-      snap = await getDoc(publicRef);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, publicPath);
+  const refreshBackendData = useCallback(async (targetUser?: FirebaseUser | null) => {
+    const fbUser = targetUser ?? auth.currentUser;
+    if (!fbUser) return;
+    if (syncInFlightRef.current) {
+      return syncInFlightRef.current;
     }
 
-    if (!snap.exists()) {
+    const task = (async () => {
       try {
-        await setDoc(publicRef, {
-          uid: profile.uid,
-          displayName: safeDisplayName,
-          points: 100,
-          tier: 'Bronze',
-          vipActive: false,
+        await fbUser.getIdToken();
+
+        const [syncRes, ridesRes, cfgRes] = await Promise.all([
+          api.syncAuth(),
+          api.getRides().catch(() => ({ rides: [] as Ride[] })),
+          api.getPublicConfig().catch(() => null),
+        ]);
+
+        if (cfgRes?.settings) {
+          setSettings(cfgRes.settings);
+        }
+
+        setUser(syncRes.user);
+        setVouchers(syncRes.vouchers || []);
+        setRides(ridesRes.rides || []);
+        if (syncRes.user.phone) {
+          setClientPhone((prev) => prev || syncRes.user.phone);
+        }
+        setProfileSyncNotice(null);
+      } catch (err) {
+        const parsed = formatFirebaseError(err);
+        console.error('Firestore profile sync error:', parsed.code, parsed.message);
+
+        const isVerifiedStrictAdmin =
+          Boolean(fbUser.emailVerified) &&
+          (fbUser.email || '').trim().toLowerCase() === STRICT_ADMIN_EMAIL;
+
+        // Safe fallback: if initial Firestore profile read fails or doc doesn't exist,
+        // unlock the interface and open the mandatory onboarding registration modal.
+        const fallbackUser: UserProfile = {
+          uid: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Passageiro VIP',
+          email: fbUser.email || '',
+          phone: fbUser.phoneNumber || '',
+          address: '',
+          cpf: '',
+          profileCompleted: false,
           walletBalance: 0,
           pendingPenalty: 0,
-          profileCompleted: Boolean(profile.profileCompleted),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, publicPath);
-      }
-    } else {
-      const existingData = snap.data();
-      const targetCompleted = Boolean(profile.profileCompleted);
-      if (
-        existingData?.displayName !== safeDisplayName ||
-        Boolean(existingData?.profileCompleted) !== targetCompleted
-      ) {
-        try {
-          await updateDoc(publicRef, {
-            displayName: safeDisplayName,
-            profileCompleted: targetCompleted,
-            updatedAt: serverTimestamp(),
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, publicPath);
-        }
-      }
-    }
+          vipActive: false,
+          photoUrl: fbUser.photoURL || '',
+          points: 0,
+          tier: 'Bronze',
+          isAdmin: isVerifiedStrictAdmin,
+        };
 
-    const privateRef = doc(db, 'users', profile.uid, 'private', 'info');
-    let pSnap;
-    try {
-      pSnap = await getDoc(privateRef);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.GET, privatePath);
-    }
-
-    const safeEmail = (profile.email || auth.currentUser.email || 'vip@gustavoreis.app')
-      .trim()
-      .slice(0, 160);
-    const safePhone = (profile.phone || '').slice(0, 40);
-    const safeAddress = (profile.address || '').slice(0, 280);
-    const safeCpf = (profile.cpf || '').slice(0, 20);
-    const safePhotoUrl = (profile.photoUrl || '').slice(0, 500);
-
-    if (!pSnap.exists()) {
-      try {
-        await setDoc(privateRef, {
-          uid: profile.uid,
-          email: safeEmail,
-          phone: safePhone,
-          address: safeAddress,
-          cpf: safeCpf,
-          photoURL: safePhotoUrl,
-          updatedAt: serverTimestamp(),
-        });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, privatePath);
+        setProfileSyncNotice(parsed);
+        setAuthError(parsed);
+        setUser(fallbackUser);
+      } finally {
+        syncInFlightRef.current = null;
       }
-    } else {
-      const prevData = pSnap.data();
-      if (
-        prevData?.phone !== safePhone ||
-        (prevData?.address || '') !== safeAddress ||
-        (prevData?.cpf || '') !== safeCpf ||
-        prevData?.photoURL !== safePhotoUrl
-      ) {
-        try {
-          await updateDoc(privateRef, {
-            phone: safePhone,
-            address: safeAddress,
-            cpf: safeCpf,
-            photoURL: safePhotoUrl,
-            updatedAt: serverTimestamp(),
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, privatePath);
-        }
-      }
-    }
+    })();
+
+    syncInFlightRef.current = task;
+    return task;
   }, []);
-
-  const refreshBackendData = useCallback(
-    async (targetUser?: FirebaseUser | null) => {
-      const fbUser = targetUser ?? auth.currentUser;
-      if (!fbUser) return;
-      if (syncInFlightRef.current) {
-        return syncInFlightRef.current;
-      }
-
-      const task = (async () => {
-        try {
-          // Ensure ID token is valid before querying Firestore / API
-          await fbUser.getIdToken();
-
-          let firestorePublicData: Record<string, any> | null = null;
-          let firestorePrivateData: Record<string, any> | null = null;
-          let firestoreReadError: ParsedFirebaseError | null = null;
-
-          try {
-            const [pubSnap, privSnap] = await Promise.all([
-              getDoc(doc(db, 'users', fbUser.uid)),
-              getDoc(doc(db, 'users', fbUser.uid, 'private', 'info')),
-            ]);
-            firestorePublicData = pubSnap.exists() ? pubSnap.data() : null;
-            firestorePrivateData = privSnap.exists() ? privSnap.data() : null;
-          } catch (fsErr) {
-            firestoreReadError = formatFirebaseError(fsErr);
-            console.error(
-              'Firestore profile read error:',
-              firestoreReadError.code,
-              firestoreReadError.message
-            );
-          }
-
-          let backendUser: UserProfile | null = null;
-          let backendVouchers: Voucher[] = [];
-          let backendRides: Ride[] = [];
-          let backendSyncError: ParsedFirebaseError | null = null;
-
-          try {
-            const [syncRes, ridesRes] = await Promise.all([api.syncAuth(), api.getRides()]);
-            backendUser = syncRes.user;
-            backendVouchers = syncRes.vouchers || [];
-            backendRides = ridesRes.rides || [];
-          } catch (apiErr) {
-            backendSyncError = formatFirebaseError(apiErr);
-            console.warn('Backend sync warning:', backendSyncError.formatted);
-          }
-
-          if (backendUser) {
-            setUser(backendUser);
-            setVouchers(backendVouchers);
-            setRides(backendRides);
-            if (backendUser.phone) {
-              setClientPhone((prev) => prev || backendUser.phone);
-            }
-            setProfileSyncNotice(firestoreReadError);
-
-            try {
-              await ensureFirestoreUserDocs(backendUser);
-            } catch (mirrorErr) {
-              const parsedMirror = formatFirebaseError(mirrorErr);
-              console.warn('Firestore user doc sync warning:', parsedMirror.formatted);
-              if (!firestoreReadError) {
-                setProfileSyncNotice(parsedMirror);
-              }
-            }
-            return;
-          }
-
-          // Fallback when backend /api/auth/sync is unavailable (e.g. static Vercel build)
-          // or first-attempt Firestore profile read returned empty / failed:
-          const hasCompletedFirestoreProfile = Boolean(
-            !firestoreReadError &&
-              firestorePublicData &&
-              firestorePublicData.profileCompleted === true &&
-              firestorePrivateData?.phone &&
-              firestorePrivateData?.cpf &&
-              firestorePrivateData?.address
-          );
-
-          const isVerifiedStrictAdmin =
-            Boolean(fbUser.emailVerified) &&
-            (fbUser.email || '').trim().toLowerCase() === STRICT_ADMIN_EMAIL;
-
-          if (hasCompletedFirestoreProfile && firestorePublicData && firestorePrivateData) {
-            const fsPoints = Number(firestorePublicData.points ?? 100);
-            const firestoreUser: UserProfile = {
-              uid: fbUser.uid,
-              name:
-                String(firestorePublicData.displayName || fbUser.displayName || '').trim() ||
-                'Passageiro VIP',
-              email: String(firestorePrivateData.email || fbUser.email || ''),
-              phone: String(firestorePrivateData.phone || ''),
-              address: String(firestorePrivateData.address || ''),
-              cpf: String(firestorePrivateData.cpf || ''),
-              profileCompleted: true,
-              walletBalance: Number(firestorePublicData.walletBalance ?? 0),
-              pendingPenalty: Number(firestorePublicData.pendingPenalty ?? 0),
-              vipActive: Boolean(firestorePublicData.vipActive ?? firestorePublicData.isVip ?? false),
-              vipPreferences: firestorePrivateData.vipPreferences || firestorePublicData.vipPreferences,
-              photoUrl: String(firestorePrivateData.photoURL || fbUser.photoURL || ''),
-              points: fsPoints,
-              tier: (firestorePublicData.tier as UserProfile['tier']) || getVipTier(fsPoints),
-              isAdmin: isVerifiedStrictAdmin,
-            };
-            setUser(firestoreUser);
-            if (firestoreUser.phone) {
-              setClientPhone((prev) => prev || firestoreUser.phone);
-            }
-            setProfileSyncNotice(null);
-            return;
-          }
-
-          // Safe fallback: empty Firestore doc or first-attempt failure unlocks UI & opens mandatory registration modal
-          const fallbackUser: UserProfile = {
-            uid: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Passageiro VIP',
-            email: fbUser.email || '',
-            phone: String(firestorePrivateData?.phone || fbUser.phoneNumber || ''),
-            address: String(firestorePrivateData?.address || ''),
-            cpf: String(firestorePrivateData?.cpf || ''),
-            profileCompleted: false,
-            walletBalance: Number(firestorePublicData?.walletBalance ?? 0),
-            pendingPenalty: Number(firestorePublicData?.pendingPenalty ?? 0),
-            vipActive: Boolean(firestorePublicData?.vipActive ?? false),
-            photoUrl: fbUser.photoURL || '',
-            points: Number(firestorePublicData?.points ?? 100),
-            tier: (firestorePublicData?.tier as UserProfile['tier']) || 'Bronze',
-            isAdmin: isVerifiedStrictAdmin,
-          };
-
-          const notice = firestoreReadError || backendSyncError;
-          if (notice) {
-            setProfileSyncNotice(notice);
-            setAuthError(notice);
-          }
-          setUser(fallbackUser);
-        } catch (err) {
-          const parsed = formatFirebaseError(err);
-          console.error('Error syncing authenticated session:', parsed.code, parsed.message);
-          setAuthError(parsed);
-          // Even if token/sync hit a transient failure while fbUser exists, do not leave splash stuck
-          setUser((prev) => prev ?? null);
-        } finally {
-          syncInFlightRef.current = null;
-        }
-      })();
-
-      syncInFlightRef.current = task;
-      return task;
-    },
-    [ensureFirestoreUserDocs]
-  );
 
   // Firebase Auth listener with guaranteed loading termination
   useEffect(() => {
@@ -929,7 +726,7 @@ export default function App() {
       const activeRecurrence = user.vipActive ? recurrenceFrequency : 'none';
       const activePrefs = user.vipActive ? ridePreferences.trim().slice(0, 280) : '';
 
-      // Authoritative creation in Cloud SQL PostgreSQL (recalculates >= R$ 3.00/km + wallet + penalty + atomic conflict lock)
+      // Atomic ride + schedule slot + wallet deduction write directly in Firestore
       const res = await api.createRide({
         clientName: user.name,
         clientPhone: clientPhone.trim() || user.phone || '',
@@ -961,49 +758,6 @@ export default function App() {
       });
 
       const createdRide = res.ride;
-
-      // Mirror sanitized document into Firestore (validated against 8-pillar rules)
-      try {
-        await setDoc(doc(db, 'rides', createdRide.rideCode), {
-          rideCode: createdRide.rideCode,
-          userId: user.uid,
-          clientName: createdRide.clientName.slice(0, 120),
-          originName: createdRide.originName.slice(0, 180),
-          originAddress: (createdRide.originAddress || '').slice(0, 280),
-          destinationName: createdRide.destinationName.slice(0, 180),
-          destinationAddress: (createdRide.destinationAddress || '').slice(0, 280),
-          distanceKm: Number(createdRide.distanceKm),
-          durationMin: Math.max(1, Math.round(createdRide.durationMin)),
-          totalOccupiedMin: Number(createdRide.totalOccupiedMin || localOccupancy.totalOccupiedMin),
-          safetyMarginMin: Number(
-            createdRide.safetyMarginMin ?? settings.safetyMarginMin ?? DEFAULT_SAFETY_MARGIN_MIN
-          ),
-          roundTripMode: createdRide.roundTripMode || effectiveRoundTripMode,
-          waitTimeMin: Number(createdRide.waitTimeMin || 0),
-          returnDate: String(createdRide.returnDate || ''),
-          returnTime: String(createdRide.returnTime || ''),
-          category: createdRide.category,
-          isRoundTrip: Boolean(createdRide.isRoundTrip),
-          recurrenceFrequency: createdRide.recurrenceFrequency || 'none',
-          preferences: (createdRide.preferences || '').slice(0, 300),
-          scheduledDate: createdRide.scheduledDate,
-          scheduledTime: createdRide.scheduledTime,
-          price: Number(createdRide.price),
-          paymentMethod: String(createdRide.paymentMethod || 'Pix').slice(0, 60),
-          paymentStatus: String(createdRide.paymentStatus || '').slice(0, 80),
-          walletDeducted: Number(createdRide.walletDeducted || 0),
-          remainingDue: Number(createdRide.remainingDue ?? createdRide.price ?? 0),
-          penaltyIncluded: Number(createdRide.penaltyIncluded || 0),
-          pointsEarned: Math.max(0, Math.round(createdRide.pointsEarned)),
-          pointsRedeemed: Math.max(0, Math.round(createdRide.pointsRedeemed || 0)),
-          notes: (createdRide.notes || '').slice(0, 400),
-          status: 'Confirmado',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } catch (fsErr) {
-        handleFirestoreError(fsErr, OperationType.CREATE, `rides/${createdRide.rideCode}`);
-      }
 
       setRides((prev) => [createdRide, ...prev]);
       if (res.updatedUser) {
@@ -1057,14 +811,6 @@ export default function App() {
 
     try {
       const res = await api.updateRideStatus(rideCode, 'Cancelado');
-      try {
-        await updateDoc(doc(db, 'rides', rideCode), {
-          status: 'Cancelado',
-          updatedAt: serverTimestamp(),
-        });
-      } catch {
-        // Server SQL already updated; Firestore rule handles client cancel safely
-      }
       setRides((prev) =>
         prev.map((r) => (r.rideCode === rideCode ? { ...r, status: 'Cancelado' } : r))
       );
@@ -1176,7 +922,7 @@ export default function App() {
 
           <div className="mt-6 pt-5 border-t border-white/10 text-center space-y-1.5">
             <p className="text-[11px] text-slate-400">
-              Segurança reforçada com Firebase Auth, Cloud SQL PostgreSQL e proxies no servidor.
+              Segurança reforçada com Firebase Auth e Cloud Firestore em tempo real.
             </p>
           </div>
         </div>
@@ -2283,17 +2029,12 @@ export default function App() {
           authNotice={requiresOnboarding ? profileSyncNotice : null}
           onClose={requiresOnboarding ? undefined : () => setProfileModalOpen(false)}
           onLogout={handleLogout}
-          onProfileSaved={async (updatedUser) => {
+          onProfileSaved={(updatedUser) => {
             setUser(updatedUser);
             setAuthError(null);
             setProfileSyncNotice(null);
             if (updatedUser.phone) {
               setClientPhone(updatedUser.phone);
-            }
-            try {
-              await ensureFirestoreUserDocs(updatedUser);
-            } catch (err) {
-              console.warn('Firestore profile mirror warning:', err);
             }
           }}
         />

@@ -57,27 +57,37 @@ service cloud.firestore {
     // Entity Validation Blueprints (Anti-Update-Gap)
     // -----------------------------------------------------------------
     function isValidUserPublic(data) {
-      return data.keys().hasAll(['uid', 'displayName', 'points', 'tier', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['uid', 'updatedAt'])
         && data.keys().hasOnly([
-          'uid', 'displayName', 'points', 'pontos', 'tier',
-          'vipActive', 'isVip', 'vipExpiresAt', 'profileCompleted',
+          'uid', 'name', 'displayName', 'email', 'phone', 'address', 'cpf',
+          'photoUrl', 'photoURL',
+          'points', 'pontos', 'tier',
+          'vipActive', 'isVip', 'vipSubscribedAt', 'vipExpiresAt', 'profileCompleted',
           'walletBalance', 'pendingPenalty',
           'preferences', 'vipPreferences', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.uid)
-        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
-        && data.points is int && data.points >= 0 && data.points <= 1000000
+        && (!('name' in data) || (data.name is string && data.name.size() >= 1 && data.name.size() <= 120))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 280))
+        && (!('cpf' in data) || (data.cpf is string && data.cpf.size() <= 20))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('points' in data) || (data.points is int && data.points >= 0 && data.points <= 1000000))
         && (!('pontos' in data) || (data.pontos is int && data.pontos >= 0 && data.pontos <= 1000000))
-        && data.tier is string && data.tier in ['Bronze', 'Prata', 'Ouro', 'Black']
+        && (!('tier' in data) || (data.tier is string && data.tier in ['Bronze', 'Prata', 'Ouro', 'Black']))
         && (!('vipActive' in data) || data.vipActive is bool)
         && (!('isVip' in data) || data.isVip is bool)
+        && (!('vipSubscribedAt' in data) || data.vipSubscribedAt is timestamp || (data.vipSubscribedAt is string && data.vipSubscribedAt.size() <= 40))
         && (!('vipExpiresAt' in data) || data.vipExpiresAt is timestamp || (data.vipExpiresAt is string && data.vipExpiresAt.size() <= 40))
         && (!('profileCompleted' in data) || data.profileCompleted is bool)
         && (!('walletBalance' in data) || (data.walletBalance is number && data.walletBalance >= 0 && data.walletBalance <= 100000))
         && (!('pendingPenalty' in data) || (data.pendingPenalty is number && data.pendingPenalty >= 0 && data.pendingPenalty <= 10000))
         && (!('preferences' in data) || (data.preferences is string && data.preferences.size() <= 300) || isValidVipPreferencesMap(data.preferences))
         && (!('vipPreferences' in data) || isValidVipPreferencesMap(data.vipPreferences))
-        && data.createdAt is timestamp
+        && (!('createdAt' in data) || data.createdAt is timestamp)
         && data.updatedAt is timestamp;
     }
 
@@ -98,15 +108,52 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidWalletTransaction(data) {
+      return data.keys().hasAll(['userId', 'type', 'amount', 'balanceAfter', 'description', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'type', 'amount', 'balanceAfter', 'description', 'referenceCode', 'createdAt'])
+        && isValidId(data.userId)
+        && data.type is string && data.type in ['recarga', 'corrida', 'multa', 'ajuste_admin', 'estorno']
+        && data.amount is number && data.amount >= -100000 && data.amount <= 100000
+        && data.balanceAfter is number && data.balanceAfter >= 0 && data.balanceAfter <= 100000
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 240
+        && (!('referenceCode' in data) || (data.referenceCode is string && data.referenceCode.size() <= 80))
+        && data.createdAt is timestamp;
+    }
+
     function isValidVoucher(data) {
       return data.keys().hasAll(['voucherCode', 'userId', 'title', 'discountValue', 'used', 'createdAt'])
-        && data.keys().hasOnly(['voucherCode', 'userId', 'title', 'discountValue', 'used', 'createdAt'])
+        && data.keys().hasOnly(['voucherCode', 'userId', 'title', 'discountValue', 'pointsCost', 'used', 'createdAt'])
         && isValidId(data.voucherCode)
         && isValidId(data.userId)
         && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
         && data.discountValue is number && data.discountValue > 0 && data.discountValue <= 500
+        && (!('pointsCost' in data) || (data.pointsCost is int && data.pointsCost >= 0 && data.pointsCost <= 100000))
         && data.used is bool
         && data.createdAt is timestamp;
+    }
+
+    function isValidScheduleSlot(data) {
+      return data.keys().hasAll(['slotId', 'userId', 'sourceType', 'date', 'startTimeIso', 'endTimeIso', 'active', 'updatedAt'])
+        && data.keys().hasOnly([
+          'slotId', 'userId', 'sourceType', 'referenceCode', 'date', 'returnDate',
+          'startTimeIso', 'endTimeIso', 'returnStartTimeIso', 'returnEndTimeIso',
+          'startTimeStr', 'endTimeStr', 'reason', 'active', 'updatedAt'
+        ])
+        && isValidId(data.slotId)
+        && isValidId(data.userId)
+        && data.sourceType is string && data.sourceType in ['ride', 'manual_block']
+        && (!('referenceCode' in data) || (data.referenceCode is string && data.referenceCode.size() <= 80))
+        && data.date is string && data.date.size() >= 8 && data.date.size() <= 20
+        && (!('returnDate' in data) || (data.returnDate is string && data.returnDate.size() <= 20))
+        && data.startTimeIso is string && data.startTimeIso.size() >= 10 && data.startTimeIso.size() <= 40
+        && data.endTimeIso is string && data.endTimeIso.size() >= 10 && data.endTimeIso.size() <= 40
+        && (!('returnStartTimeIso' in data) || (data.returnStartTimeIso is string && data.returnStartTimeIso.size() <= 40))
+        && (!('returnEndTimeIso' in data) || (data.returnEndTimeIso is string && data.returnEndTimeIso.size() <= 40))
+        && (!('startTimeStr' in data) || (data.startTimeStr is string && data.startTimeStr.size() <= 10))
+        && (!('endTimeStr' in data) || (data.endTimeStr is string && data.endTimeStr.size() <= 10))
+        && (!('reason' in data) || (data.reason is string && data.reason.size() <= 200))
+        && data.active is bool
+        && data.updatedAt is timestamp;
     }
 
     function isValidRide(data) {
@@ -117,11 +164,14 @@ service cloud.firestore {
         'status', 'createdAt', 'updatedAt'
       ])
         && data.keys().hasOnly([
-          'rideCode', 'userId', 'clientName', 'originName', 'originAddress',
-          'destinationName', 'destinationAddress', 'distanceKm', 'durationMin',
+          'rideCode', 'userId', 'clientName', 'clientEmail', 'clientPhone',
+          'originName', 'originAddress', 'originLat', 'originLng',
+          'destinationName', 'destinationAddress', 'destinationLat', 'destinationLng',
+          'distanceKm', 'durationMin',
           'category', 'isRoundTrip', 'recurrenceFrequency', 'preferences',
           'scheduledDate', 'scheduledTime',
           'totalOccupiedMin', 'safetyMarginMin', 'roundTripMode', 'waitTimeMin', 'returnDate', 'returnTime',
+          'startTime', 'endTime', 'returnStartTime', 'returnEndTime',
           'price',
           'paymentMethod', 'paymentStatus', 'walletDeducted', 'remainingDue', 'penaltyIncluded',
           'pointsEarned', 'pointsRedeemed',
@@ -130,10 +180,16 @@ service cloud.firestore {
         && isValidId(data.rideCode)
         && isValidId(data.userId)
         && data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 120
+        && (!('clientEmail' in data) || (data.clientEmail is string && data.clientEmail.size() <= 160))
+        && (!('clientPhone' in data) || (data.clientPhone is string && data.clientPhone.size() <= 40))
         && data.originName is string && data.originName.size() >= 1 && data.originName.size() <= 180
         && (!('originAddress' in data) || (data.originAddress is string && data.originAddress.size() <= 280))
+        && (!('originLat' in data) || data.originLat is number)
+        && (!('originLng' in data) || data.originLng is number)
         && data.destinationName is string && data.destinationName.size() >= 1 && data.destinationName.size() <= 180
         && (!('destinationAddress' in data) || (data.destinationAddress is string && data.destinationAddress.size() <= 280))
+        && (!('destinationLat' in data) || data.destinationLat is number)
+        && (!('destinationLng' in data) || data.destinationLng is number)
         && data.distanceKm is number && data.distanceKm > 0 && data.distanceKm <= 3000
         && data.durationMin is int && data.durationMin > 0 && data.durationMin <= 5000
         && data.category is string && data.category in ['standard', 'exec', 'roundtrip']
@@ -148,6 +204,10 @@ service cloud.firestore {
         && (!('waitTimeMin' in data) || (data.waitTimeMin is int && data.waitTimeMin >= 0 && data.waitTimeMin <= 1440))
         && (!('returnDate' in data) || (data.returnDate is string && data.returnDate.size() <= 20))
         && (!('returnTime' in data) || (data.returnTime is string && data.returnTime.size() <= 10))
+        && (!('startTime' in data) || (data.startTime is string && data.startTime.size() <= 40))
+        && (!('endTime' in data) || (data.endTime is string && data.endTime.size() <= 40))
+        && (!('returnStartTime' in data) || (data.returnStartTime is string && data.returnStartTime.size() <= 40))
+        && (!('returnEndTime' in data) || (data.returnEndTime is string && data.returnEndTime.size() <= 40))
         && data.price is number && data.price >= 15 && data.price <= 50000
         && (!('paymentMethod' in data) || (data.paymentMethod is string && data.paymentMethod.size() <= 60))
         && (!('paymentStatus' in data) || (data.paymentStatus is string && data.paymentStatus.size() <= 80))
@@ -164,23 +224,37 @@ service cloud.firestore {
 
     function isValidWalletTopup(data) {
       return data.keys().hasAll(['requestCode', 'userId', 'amount', 'pixKey', 'status', 'createdAt'])
-        && data.keys().hasOnly(['requestCode', 'userId', 'userName', 'amount', 'pixKey', 'status', 'createdAt'])
+        && data.keys().hasOnly([
+          'requestCode', 'userId', 'userName', 'userEmail', 'userPhone',
+          'amount', 'pixKey', 'status', 'adminNotes', 'reviewedAt', 'createdAt'
+        ])
         && isValidId(data.requestCode)
         && isValidId(data.userId)
         && (!('userName' in data) || (data.userName is string && data.userName.size() <= 120))
+        && (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 160))
+        && (!('userPhone' in data) || (data.userPhone is string && data.userPhone.size() <= 40))
         && data.amount is number && data.amount >= 5 && data.amount <= 10000
         && data.pixKey is string && data.pixKey.size() >= 3 && data.pixKey.size() <= 120
         && data.status is string && data.status in ['Pendente', 'Aprovado', 'Rejeitado']
+        && (!('adminNotes' in data) || (data.adminNotes is string && data.adminNotes.size() <= 240))
+        && (!('reviewedAt' in data) || (data.reviewedAt is string && data.reviewedAt.size() <= 40))
         && data.createdAt is timestamp;
     }
 
     function isValidVipRequest(data) {
       return data.keys().hasAll(['userId', 'amount', 'status', 'createdAt'])
-        && data.keys().hasOnly(['userId', 'userName', 'amount', 'status', 'createdAt'])
+        && data.keys().hasOnly([
+          'userId', 'userName', 'userEmail', 'userPhone', 'amount', 'notes',
+          'status', 'reviewedAt', 'createdAt'
+        ])
         && isValidId(data.userId)
         && (!('userName' in data) || (data.userName is string && data.userName.size() <= 120))
+        && (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 160))
+        && (!('userPhone' in data) || (data.userPhone is string && data.userPhone.size() <= 40))
         && data.amount is number && data.amount >= 1 && data.amount <= 1000
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 300))
         && data.status is string && data.status in ['Pendente', 'Aprovado', 'Rejeitado']
+        && (!('reviewedAt' in data) || (data.reviewedAt is string && data.reviewedAt.size() <= 40))
         && data.createdAt is timestamp;
     }
 
@@ -251,15 +325,15 @@ service cloud.firestore {
 
       allow create: if isValidId(userId)
         && isValidUserPublic(incoming())
-        && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
+        && (!('createdAt' in incoming()) || incoming().createdAt == request.time)
         && (
           (isAdmin() && incoming().uid == userId) ||
           (isOwner(userId)
             && incoming().uid == request.auth.uid
-            && incoming().points == 100
-            && (!('pontos' in incoming()) || incoming().pontos == 100 || incoming().pontos == 0)
-            && incoming().tier == 'Bronze'
+            && (!('points' in incoming()) || incoming().points == 0 || incoming().points == 100)
+            && (!('pontos' in incoming()) || incoming().pontos == 0 || incoming().pontos == 100)
+            && (!('tier' in incoming()) || incoming().tier == 'Bronze')
             && (!('vipActive' in incoming()) || incoming().vipActive == false)
             && (!('isVip' in incoming()) || incoming().isVip == false)
             && (!('walletBalance' in incoming()) || incoming().walletBalance == 0)
@@ -270,17 +344,22 @@ service cloud.firestore {
       allow update: if isValidId(userId)
         && isValidUserPublic(incoming())
         && incoming().uid == existing().uid
-        && incoming().createdAt == existing().createdAt
+        && (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt)
         && incoming().updatedAt == request.time
         && (
           isAdmin() ||
           (isOwner(userId)
             && incoming().diff(existing()).affectedKeys().hasOnly([
-              'displayName', 'profileCompleted', 'preferences', 'vipPreferences', 'updatedAt'
+              'name', 'displayName', 'email', 'phone', 'address', 'cpf',
+              'photoUrl', 'photoURL', 'profileCompleted', 'preferences', 'vipPreferences',
+              'isVip', 'vipActive', 'walletBalance', 'pendingPenalty', 'points', 'pontos', 'updatedAt'
             ])
-            && !incoming().diff(existing()).affectedKeys().hasAny([
-              'isVip', 'vipActive', 'vipExpiresAt', 'pontos', 'points', 'tier', 'walletBalance', 'pendingPenalty'
-            ]))
+            && !incoming().diff(existing()).affectedKeys().hasAny(['vipExpiresAt', 'tier'])
+            && (!('isVip' in incoming()) || incoming().isVip == false || ('isVip' in existing() && incoming().isVip == existing().isVip))
+            && (!('vipActive' in incoming()) || incoming().vipActive == false || ('vipActive' in existing() && incoming().vipActive == existing().vipActive))
+            && (!('points' in incoming()) || !('points' in existing()) ? (!('points' in incoming()) || incoming().points == 0 || incoming().points == 100) : incoming().points <= existing().points)
+            && (!('pontos' in incoming()) || !('pontos' in existing()) ? (!('pontos' in incoming()) || incoming().pontos == 0 || incoming().pontos == 100) : incoming().pontos <= existing().pontos)
+            && (!('walletBalance' in incoming()) || !('walletBalance' in existing()) ? (!('walletBalance' in incoming()) || incoming().walletBalance == 0) : incoming().walletBalance <= existing().walletBalance))
         );
 
       allow delete: if false;
@@ -321,7 +400,16 @@ service cloud.firestore {
           && incoming().userId == userId
           && incoming().createdAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId))
-          && isAdmin();
+          && (
+            isAdmin() ||
+            (isOwner(userId)
+              && incoming().used == false
+              && incoming().discountValue in [15, 35, 60]
+              && ('pointsCost' in incoming())
+              && incoming().pointsCost >= 300
+              && getAfter(/databases/$(database)/documents/users/$(userId)).data.points
+                 <= get(/databases/$(database)/documents/users/$(userId)).data.points - incoming().pointsCost)
+          );
 
         allow update: if isValidId(userId) && isValidId(voucherId)
           && isValidVoucher(incoming())
@@ -337,6 +425,24 @@ service cloud.firestore {
           );
 
         allow delete: if false;
+      }
+
+      // User Digital Wallet Transactions Subcollection
+      match /walletTransactions/{txId} {
+        allow get: if isValidId(userId) && isValidId(txId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+
+        allow create: if isValidId(userId) && isValidId(txId)
+          && isValidWalletTransaction(incoming())
+          && incoming().userId == userId
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && (
+            isAdmin() ||
+            (isOwner(userId) && incoming().amount <= 0)
+          );
+
+        allow update, delete: if false;
       }
     }
 
@@ -376,6 +482,35 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    match /scheduleSlots/{slotId} {
+      allow get: if isValidId(slotId) && isVerified();
+      allow list: if isVerified() && (resource.data.active is bool);
+
+      allow create: if isValidId(slotId)
+        && isVerified()
+        && isValidScheduleSlot(incoming())
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (incoming().sourceType == 'ride' && incoming().userId == request.auth.uid)
+        );
+
+      allow update: if isValidId(slotId)
+        && isVerified()
+        && isValidScheduleSlot(incoming())
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (existing().userId == request.auth.uid
+            && incoming().sourceType == 'ride'
+            && incoming().active == false
+            && incoming().diff(existing()).affectedKeys().hasOnly(['active', 'updatedAt']))
+        );
+
+      allow delete: if isValidId(slotId) && isAdmin();
     }
 
     match /expenses/{expenseId} {

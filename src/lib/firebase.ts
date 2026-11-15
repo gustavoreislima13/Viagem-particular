@@ -14,8 +14,13 @@ import {
   doc,
   getDoc,
   getDocFromServer,
+  getDocs,
   setDoc,
+  addDoc,
   updateDoc,
+  deleteDoc,
+  runTransaction,
+  writeBatch,
   serverTimestamp,
   collection,
   query,
@@ -27,8 +32,13 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 export { firebaseConfig };
 
-const missingKeys = (['apiKey', 'authDomain', 'projectId', 'appId'] as const).filter(
-  (key) => !String(firebaseConfig[key] || '').trim()
+const isPlaceholderOrEmpty = (val?: string | null): boolean => {
+  const trimmed = String(val || '').trim();
+  return !trimmed || trimmed.toLowerCase().includes('secret value');
+};
+
+const missingKeys = (['apiKey', 'authDomain', 'projectId', 'appId'] as const).filter((key) =>
+  isPlaceholderOrEmpty(firebaseConfig[key])
 );
 
 export const firebaseConfigError: { code: string; message: string; formatted: string } | null =
@@ -43,10 +53,12 @@ export const firebaseConfigError: { code: string; message: string; formatted: st
 export const app: FirebaseApp =
   getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// CRITICAL: Use the provisioned database ID directly from firebase-applet-config.json
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+const rawDbId = String(firebaseConfig.firestoreDatabaseId || '').trim();
+const useDefaultDatabase =
+  !rawDbId || rawDbId === '(default)' || rawDbId.toLowerCase().includes('secret value');
+
+// Initialize Firestore directly from firebase-applet-config.json; use default DB if empty or "(default)"
+export const db = useDefaultDatabase ? getFirestore(app) : getFirestore(app, rawDbId);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -86,14 +98,15 @@ export interface ParsedFirebaseError {
 
 export function formatFirebaseError(error: unknown): ParsedFirebaseError {
   if (error && typeof error === 'object') {
-    const rawCode = typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : '';
-    const rawMessage = typeof (error as { message?: unknown }).message === 'string'
-      ? (error as { message: string }).message
-      : String(error);
+    const rawCode =
+      typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : '';
+    const rawMessage =
+      typeof (error as { message?: unknown }).message === 'string'
+        ? (error as { message: string }).message
+        : String(error);
 
-    // Unwrap structured JSON thrown by handleFirestoreError if present
     if (!rawCode && rawMessage.startsWith('{') && rawMessage.includes('"operationType"')) {
       try {
         const parsed = JSON.parse(rawMessage) as Partial<FirestoreErrorInfo>;
@@ -107,7 +120,7 @@ export function formatFirebaseError(error: unknown): ParsedFirebaseError {
           formatted: `${innerCode}: ${innerMsg}`,
         };
       } catch {
-        // Fall through to standard formatting
+        // Fall through
       }
     }
 
@@ -120,7 +133,8 @@ export function formatFirebaseError(error: unknown): ParsedFirebaseError {
     };
   }
 
-  const message = typeof error === 'string' && error.trim() ? error : 'Erro desconhecido no Firebase.';
+  const message =
+    typeof error === 'string' && error.trim() ? error : 'Erro desconhecido no Firebase.';
   return {
     code: 'firebase/unknown-error',
     message,
@@ -154,7 +168,11 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-export async function testFirestoreConnection(): Promise<{ ok: boolean; quotaExceeded?: boolean; upgradeUrl?: string }> {
+export async function testFirestoreConnection(): Promise<{
+  ok: boolean;
+  quotaExceeded?: boolean;
+  upgradeUrl?: string;
+}> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return { ok: true };
@@ -165,13 +183,13 @@ export async function testFirestoreConnection(): Promise<{ ok: boolean; quotaExc
       return { ok: false };
     }
     if (msg.includes('Quota exceeded')) {
+      const dbSegment = useDefaultDatabase ? '(default)' : rawDbId;
       return {
         ok: false,
         quotaExceeded: true,
-        upgradeUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId || '(default)'}/data?openUpgradeDialog=true`,
+        upgradeUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${dbSegment}/data?openUpgradeDialog=true`,
       };
     }
-    // Missing or insufficient permissions confirms active connectivity to Firestore server rules
     return { ok: true };
   }
 }
@@ -184,10 +202,9 @@ export async function signInWithGooglePopup(): Promise<FirebaseUser> {
   }
 
   try {
-    // Prefer localStorage/IndexedDB persistence to prevent cross-domain cookie issues on Vercel
     await setPersistence(auth, browserLocalPersistence);
   } catch {
-    // Non-fatal if browser restricts persistence mode
+    // Non-fatal in restricted browsers
   }
 
   const result = await signInWithPopup(auth, googleProvider);
@@ -203,8 +220,13 @@ export {
   doc,
   getDoc,
   getDocFromServer,
+  getDocs,
   setDoc,
+  addDoc,
   updateDoc,
+  deleteDoc,
+  runTransaction,
+  writeBatch,
   serverTimestamp,
   collection,
   query,

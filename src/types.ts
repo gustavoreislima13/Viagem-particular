@@ -86,7 +86,7 @@ export interface VipPreferences {
 }
 
 export interface PartnerRaffle {
-  id: number;
+  id: string | number;
   partnerName: string;
   partnerLogoUrl: string;
   prizeTitle: string;
@@ -106,7 +106,7 @@ export type PaymentMethod =
   | 'Carteira + Cartão Presencial';
 
 export interface WalletTopupRequest {
-  id: number;
+  id: string | number;
   requestCode: string;
   userId: string;
   userName: string;
@@ -121,7 +121,7 @@ export interface WalletTopupRequest {
 }
 
 export interface WalletTransaction {
-  id: number;
+  id: string | number;
   userId: string;
   type: 'recarga' | 'corrida' | 'multa' | 'ajuste_admin' | 'estorno';
   amount: number;
@@ -132,7 +132,7 @@ export interface WalletTransaction {
 }
 
 export interface VipRequest {
-  id: number;
+  id: string | number;
   userId: string;
   userName: string;
   userEmail: string;
@@ -234,7 +234,7 @@ export interface Ride {
 }
 
 export interface ScheduleBlock {
-  id: number;
+  id: string | number;
   adminUid: string;
   blockDate: string;
   startTimeStr: string;
@@ -276,7 +276,7 @@ export interface ScheduleAvailabilityResponse {
 }
 
 export interface Expense {
-  id: number;
+  id: string | number;
   adminUid: string;
   category: ExpenseCategory | string;
   description: string;

@@ -136,7 +136,7 @@ export function CreatorDashboardModal({
   const [blockEndHhmm, setBlockEndHhmm] = useState('13:30');
   const [blockReason, setBlockReason] = useState('');
   const [savingBlock, setSavingBlock] = useState(false);
-  const [deletingBlockId, setDeletingBlockId] = useState<number | null>(null);
+  const [deletingBlockId, setDeletingBlockId] = useState<string | number | null>(null);
 
   // New Expense Form
   const [expCategory, setExpCategory] = useState<ExpenseCategory>('Combustível');
@@ -257,7 +257,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleDeleteScheduleBlock = async (id: number) => {
+  const handleDeleteScheduleBlock = async (id: string | number) => {
     setDeletingBlockId(id);
     setErrorMsg(null);
     try {
@@ -294,7 +294,7 @@ export function CreatorDashboardModal({
       setExpAmount('');
       setExpOdometer('');
       await loadDashboard();
-      setSuccessMsg('Despesa registrada com sucesso no PostgreSQL.');
+      setSuccessMsg('Despesa registrada com sucesso no Firestore.');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Falha ao cadastrar gasto.');
@@ -333,7 +333,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleToggleRaffle = async (id: number, nextActive: boolean) => {
+  const handleToggleRaffle = async (id: string | number, nextActive: boolean) => {
     try {
       await api.toggleAdminRaffle(id, nextActive);
       await loadDashboard();
@@ -342,7 +342,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleDeleteRaffle = async (id: number) => {
+  const handleDeleteRaffle = async (id: string | number) => {
     try {
       await api.deleteAdminRaffle(id);
       await loadDashboard();
@@ -351,7 +351,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleDeleteExpense = async (id: number) => {
+  const handleDeleteExpense = async (id: string | number) => {
     try {
       await api.deleteExpense(id);
       await loadDashboard();
@@ -397,7 +397,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleReviewTopup = async (id: number, approve: boolean) => {
+  const handleReviewTopup = async (id: string | number, approve: boolean) => {
     setWalletBusyKey(`topup-${id}`);
     setErrorMsg(null);
     try {
@@ -461,7 +461,7 @@ export function CreatorDashboardModal({
     }
   };
 
-  const handleReviewVipRequest = async (id: number, approve: boolean) => {
+  const handleReviewVipRequest = async (id: string | number, approve: boolean) => {
     setWalletBusyKey(`vipreq-${id}`);
     setErrorMsg(null);
     try {
@@ -687,7 +687,7 @@ export function CreatorDashboardModal({
           {loading && !summary ? (
             <div className="py-16 flex items-center justify-center gap-2 text-slate-400 text-sm">
               <Loader2 className="w-5 h-5 animate-spin text-emeraldVip" />
-              Sincronizando PostgreSQL e métricas...
+              Sincronizando Firestore e métricas...
             </div>
           ) : (
             <>
@@ -2081,7 +2081,7 @@ export function CreatorDashboardModal({
                     ) : (
                       <Car className="w-4 h-4" />
                     )}
-                    Atualizar Tarifas no PostgreSQL
+                    Atualizar Tarifas no Firestore
                   </button>
                 </form>
               )}
@@ -2095,19 +2095,16 @@ export function CreatorDashboardModal({
                   </h3>
                   <ul className="space-y-2.5 text-xs text-slate-300 leading-relaxed">
                     <li>
-                      • <strong className="text-white">Autenticação Zero-Trust via Firebase ID Token:</strong> O antigo bloqueio por PIN fixo no navegador e senhas em localStorage foi substituído por verificação criptográfica no servidor (<code className="text-emeraldVip">firebase-admin</code>) exigindo e-mail Google verificado para o motorista.
+                      • <strong className="text-white">Autenticação Zero-Trust via Firebase Auth Pop-up:</strong> O acesso administrativo é restrito estritamente à conta Google verificada <code className="text-emeraldVip">reisanselmo7@gmail.com</code> tanto na interface quanto nas regras do banco.
                     </li>
                     <li>
-                      • <strong className="text-white">Auditoria de Preço no Back-End:</strong> Mesmo que um cliente tente alterar valores no navegador, <code className="text-emeraldVip">POST /api/rides</code> recalcula distância, desconto Bate &amp; Volta (10%), nível VIP e trava o piso de R$ 3,00/km no servidor.
+                      • <strong className="text-white">Auditoria e Piso de Preço + Anti-Escalação:</strong> As regras <code className="text-emeraldVip">firestore.rules</code> impedem que qualquer passageiro altere saldo da carteira, status Clube VIP ou aumente pontos manualmente, validando transações atômicas diretamente no Firestore.
                     </li>
                     <li>
-                      • <strong className="text-white">Isolamento de PII e Regras 8-Pilares no Firestore:</strong> Dados sensíveis (e-mail, telefone) ficam isolados em subcoleção privada, com regras auditadas pelo ESLint Security Rules.
+                      • <strong className="text-white">Agenda Anti-Conflito sem Expor Dados Privados:</strong> A coleção <code className="text-emeraldVip">scheduleSlots</code> bloqueia horários ocupados em tempo real sem expor nome, telefone ou endereço de outros passageiros.
                     </li>
                     <li>
-                      • <strong className="text-white">PostgreSQL (Cloud SQL) com Drizzle ORM:</strong> Todas as queries utilizam prepared statements parametrizados, prevenindo SQL Injection.
-                    </li>
-                    <li>
-                      • <strong className="text-white">Proxies de API no Servidor:</strong> Chaves Gemini e chamadas REST de rotas/lugares ficam protegidas no servidor Express, evitando exposição em código client-side.
+                      • <strong className="text-white">Comunicação 100% SDK Oficial Firebase Firestore:</strong> Leituras e gravações ocorrem diretamente via <code className="text-emeraldVip">firebase/firestore</code> sem intermediários que retornem HTML/404 em deploy estático.
                     </li>
                   </ul>
                 </div>

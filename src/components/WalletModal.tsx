@@ -11,16 +11,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { doc } from 'firebase/firestore';
 import { OFFICIAL_PIX_KEY, api, formatCurrency } from '../services/api.ts';
-import {
-  OperationType,
-  auth,
-  db,
-  handleFirestoreError,
-  serverTimestamp,
-  setDoc,
-} from '../lib/firebase.ts';
 import { UserProfile, WalletTopupRequest, WalletTransaction } from '../types.ts';
 
 interface WalletModalProps {
@@ -114,22 +105,6 @@ export function WalletModal({
     try {
       const res = await api.requestWalletTopup(numeric);
       const created = res.topup;
-
-      if (auth.currentUser) {
-        try {
-          await setDoc(doc(db, 'walletTopups', created.requestCode), {
-            requestCode: created.requestCode,
-            userId: user.uid,
-            userName: (user.name || 'Passageiro VIP').slice(0, 120),
-            amount: Number(created.amount),
-            pixKey: effectivePixKey.slice(0, 120),
-            status: 'Pendente',
-            createdAt: serverTimestamp(),
-          });
-        } catch (fsErr) {
-          handleFirestoreError(fsErr, OperationType.CREATE, `walletTopups/${created.requestCode}`);
-        }
-      }
 
       setSuccessMsg(
         `Solicitação ${created.requestCode} de ${formatCurrency(
