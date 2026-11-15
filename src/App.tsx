@@ -31,14 +31,16 @@ import {
   X,
 } from 'lucide-react';
 import {
-  doc,
-  getDoc,
-} from 'firebase/firestore';
-import {
+  FirebaseUser,
   OperationType,
+  ParsedFirebaseError,
   auth,
   collection,
   db,
+  doc,
+  firebaseConfigError,
+  formatFirebaseError,
+  getDoc,
   handleFirestoreError,
   onAuthStateChanged,
   onSnapshot,
@@ -120,7 +122,8 @@ export default function App() {
   // System & Auth state
   const [authLoading, setAuthLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<ParsedFirebaseError | null>(firebaseConfigError);
+  const [profileSyncNotice, setProfileSyncNotice] = useState<ParsedFirebaseError | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [mapsBrowserKey, setMapsBrowserKey] = useState('');
@@ -317,44 +320,193 @@ export default function App() {
     }
   }, []);
 
-  const refreshBackendData = useCallback(async () => {
-    if (!auth.currentUser) return;
-    if (syncInFlightRef.current) {
-      return syncInFlightRef.current;
-    }
+  const refreshBackendData = useCallback(
+    async (targetUser?: FirebaseUser | null) => {
+      const fbUser = targetUser ?? auth.currentUser;
+      if (!fbUser) return;
+      if (syncInFlightRef.current) {
+        return syncInFlightRef.current;
+      }
 
-    const task = (async () => {
-      try {
-        const [syncRes, ridesRes] = await Promise.all([api.syncAuth(), api.getRides()]);
-        setUser(syncRes.user);
-        setVouchers(syncRes.vouchers || []);
-        setRides(ridesRes.rides || []);
-        if (syncRes.user.phone) {
-          setClientPhone((prev) => prev || syncRes.user.phone);
+      const task = (async () => {
+        try {
+          // Ensure ID token is valid before querying Firestore / API
+          await fbUser.getIdToken();
+
+          let firestorePublicData: Record<string, any> | null = null;
+          let firestorePrivateData: Record<string, any> | null = null;
+          let firestoreReadError: ParsedFirebaseError | null = null;
+
+          try {
+            const [pubSnap, privSnap] = await Promise.all([
+              getDoc(doc(db, 'users', fbUser.uid)),
+              getDoc(doc(db, 'users', fbUser.uid, 'private', 'info')),
+            ]);
+            firestorePublicData = pubSnap.exists() ? pubSnap.data() : null;
+            firestorePrivateData = privSnap.exists() ? privSnap.data() : null;
+          } catch (fsErr) {
+            firestoreReadError = formatFirebaseError(fsErr);
+            console.error(
+              'Firestore profile read error:',
+              firestoreReadError.code,
+              firestoreReadError.message
+            );
+          }
+
+          let backendUser: UserProfile | null = null;
+          let backendVouchers: Voucher[] = [];
+          let backendRides: Ride[] = [];
+          let backendSyncError: ParsedFirebaseError | null = null;
+
+          try {
+            const [syncRes, ridesRes] = await Promise.all([api.syncAuth(), api.getRides()]);
+            backendUser = syncRes.user;
+            backendVouchers = syncRes.vouchers || [];
+            backendRides = ridesRes.rides || [];
+          } catch (apiErr) {
+            backendSyncError = formatFirebaseError(apiErr);
+            console.warn('Backend sync warning:', backendSyncError.formatted);
+          }
+
+          if (backendUser) {
+            setUser(backendUser);
+            setVouchers(backendVouchers);
+            setRides(backendRides);
+            if (backendUser.phone) {
+              setClientPhone((prev) => prev || backendUser.phone);
+            }
+            setProfileSyncNotice(firestoreReadError);
+
+            try {
+              await ensureFirestoreUserDocs(backendUser);
+            } catch (mirrorErr) {
+              const parsedMirror = formatFirebaseError(mirrorErr);
+              console.warn('Firestore user doc sync warning:', parsedMirror.formatted);
+              if (!firestoreReadError) {
+                setProfileSyncNotice(parsedMirror);
+              }
+            }
+            return;
+          }
+
+          // Fallback when backend /api/auth/sync is unavailable (e.g. static Vercel build)
+          // or first-attempt Firestore profile read returned empty / failed:
+          const hasCompletedFirestoreProfile = Boolean(
+            !firestoreReadError &&
+              firestorePublicData &&
+              firestorePublicData.profileCompleted === true &&
+              firestorePrivateData?.phone &&
+              firestorePrivateData?.cpf &&
+              firestorePrivateData?.address
+          );
+
+          const isVerifiedStrictAdmin =
+            Boolean(fbUser.emailVerified) &&
+            (fbUser.email || '').trim().toLowerCase() === STRICT_ADMIN_EMAIL;
+
+          if (hasCompletedFirestoreProfile && firestorePublicData && firestorePrivateData) {
+            const fsPoints = Number(firestorePublicData.points ?? 100);
+            const firestoreUser: UserProfile = {
+              uid: fbUser.uid,
+              name:
+                String(firestorePublicData.displayName || fbUser.displayName || '').trim() ||
+                'Passageiro VIP',
+              email: String(firestorePrivateData.email || fbUser.email || ''),
+              phone: String(firestorePrivateData.phone || ''),
+              address: String(firestorePrivateData.address || ''),
+              cpf: String(firestorePrivateData.cpf || ''),
+              profileCompleted: true,
+              walletBalance: Number(firestorePublicData.walletBalance ?? 0),
+              pendingPenalty: Number(firestorePublicData.pendingPenalty ?? 0),
+              vipActive: Boolean(firestorePublicData.vipActive ?? firestorePublicData.isVip ?? false),
+              vipPreferences: firestorePrivateData.vipPreferences || firestorePublicData.vipPreferences,
+              photoUrl: String(firestorePrivateData.photoURL || fbUser.photoURL || ''),
+              points: fsPoints,
+              tier: (firestorePublicData.tier as UserProfile['tier']) || getVipTier(fsPoints),
+              isAdmin: isVerifiedStrictAdmin,
+            };
+            setUser(firestoreUser);
+            if (firestoreUser.phone) {
+              setClientPhone((prev) => prev || firestoreUser.phone);
+            }
+            setProfileSyncNotice(null);
+            return;
+          }
+
+          // Safe fallback: empty Firestore doc or first-attempt failure unlocks UI & opens mandatory registration modal
+          const fallbackUser: UserProfile = {
+            uid: fbUser.uid,
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Passageiro VIP',
+            email: fbUser.email || '',
+            phone: String(firestorePrivateData?.phone || fbUser.phoneNumber || ''),
+            address: String(firestorePrivateData?.address || ''),
+            cpf: String(firestorePrivateData?.cpf || ''),
+            profileCompleted: false,
+            walletBalance: Number(firestorePublicData?.walletBalance ?? 0),
+            pendingPenalty: Number(firestorePublicData?.pendingPenalty ?? 0),
+            vipActive: Boolean(firestorePublicData?.vipActive ?? false),
+            photoUrl: fbUser.photoURL || '',
+            points: Number(firestorePublicData?.points ?? 100),
+            tier: (firestorePublicData?.tier as UserProfile['tier']) || 'Bronze',
+            isAdmin: isVerifiedStrictAdmin,
+          };
+
+          const notice = firestoreReadError || backendSyncError;
+          if (notice) {
+            setProfileSyncNotice(notice);
+            setAuthError(notice);
+          }
+          setUser(fallbackUser);
+        } catch (err) {
+          const parsed = formatFirebaseError(err);
+          console.error('Error syncing authenticated session:', parsed.code, parsed.message);
+          setAuthError(parsed);
+          // Even if token/sync hit a transient failure while fbUser exists, do not leave splash stuck
+          setUser((prev) => prev ?? null);
+        } finally {
+          syncInFlightRef.current = null;
         }
-        await ensureFirestoreUserDocs(syncRes.user);
-      } catch (err) {
-        console.error('Error syncing authenticated session:', err);
-      } finally {
-        syncInFlightRef.current = null;
-      }
-    })();
+      })();
 
-    syncInFlightRef.current = task;
-    return task;
-  }, [ensureFirestoreUserDocs]);
+      syncInFlightRef.current = task;
+      return task;
+    },
+    [ensureFirestoreUserDocs]
+  );
 
-  // Firebase Auth listener
+  // Firebase Auth listener with guaranteed loading termination
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        await refreshBackendData();
-      } else {
-        setUser((prev) => (prev?.isGuest ? prev : null));
+    let active = true;
+    const unsub = onAuthStateChanged(
+      auth,
+      async (fbUser) => {
+        try {
+          if (fbUser) {
+            await refreshBackendData(fbUser);
+          } else if (active) {
+            setUser((prev) => (prev?.isGuest ? prev : null));
+          }
+        } catch (err) {
+          if (active) {
+            setAuthError(formatFirebaseError(err));
+          }
+        } finally {
+          if (active) {
+            setAuthLoading(false);
+          }
+        }
+      },
+      (listenerErr) => {
+        if (active) {
+          setAuthError(formatFirebaseError(listenerErr));
+          setAuthLoading(false);
+        }
       }
-      setAuthLoading(false);
-    });
-    return () => unsub();
+    );
+    return () => {
+      active = false;
+      unsub();
+    };
   }, [refreshBackendData]);
 
   // Strict Admin route protection (redirect unauthorized /admin attempts back to /)
@@ -580,19 +732,22 @@ export default function App() {
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
     setAuthError(null);
+    setProfileSyncNotice(null);
     try {
-      await signInWithGooglePopup();
-      // onAuthStateChanged triggers refreshBackendData cleanly without racing
-      await refreshBackendData();
-    } catch (err: any) {
-      setAuthError(err?.message || 'Não foi possível concluir o login com o Google.');
+      const fbUser = await signInWithGooglePopup();
+      await refreshBackendData(fbUser);
+    } catch (err) {
+      const parsed = formatFirebaseError(err);
+      setAuthError(parsed);
     } finally {
       setSigningIn(false);
+      setAuthLoading(false);
     }
   };
 
   const handleEnterAsGuest = () => {
     setAuthError(null);
+    setProfileSyncNotice(null);
     setUser({
       uid: 'guest-preview',
       name: 'Passageiro Visitante',
@@ -616,6 +771,7 @@ export default function App() {
     setDrawerOpen(false);
     setDashboardOpen(false);
     setProfileModalOpen(false);
+    setProfileSyncNotice(null);
     if (auth.currentUser) {
       await signOutFirebase();
     }
@@ -973,8 +1129,20 @@ export default function App() {
           </div>
 
           {authError && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-xs text-red-200">
-              {authError}
+            <div
+              role="alert"
+              className="mb-4 p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-100 space-y-1"
+            >
+              <div className="flex items-center gap-2 font-bold text-red-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Não foi possível concluir a autenticação</span>
+              </div>
+              {authError.code && (
+                <p className="font-mono text-[11px] text-red-200/90 break-all">
+                  Código: {authError.code}
+                </p>
+              )}
+              <p className="text-red-100 break-words">{authError.message}</p>
             </div>
           )}
 
@@ -2112,10 +2280,13 @@ export default function App() {
           isOpen={requiresOnboarding || profileModalOpen}
           mode={requiresOnboarding ? 'onboarding' : 'edit'}
           user={user}
+          authNotice={requiresOnboarding ? profileSyncNotice : null}
           onClose={requiresOnboarding ? undefined : () => setProfileModalOpen(false)}
           onLogout={handleLogout}
           onProfileSaved={async (updatedUser) => {
             setUser(updatedUser);
+            setAuthError(null);
+            setProfileSyncNotice(null);
             if (updatedUser.phone) {
               setClientPhone(updatedUser.phone);
             }

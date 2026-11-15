@@ -12,6 +12,16 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import {
+  auth,
+  db,
+  doc,
+  formatFirebaseError,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from '../lib/firebase.ts';
 import { api, formatCurrency } from '../services/api.ts';
 import { UserProfile } from '../types.ts';
 import { formatCpf, formatPhoneBr, isValidCpf, onlyDigits } from '../utils/validators.ts';
@@ -20,6 +30,7 @@ interface OnboardingProfileModalProps {
   isOpen: boolean;
   mode: 'onboarding' | 'edit';
   user: UserProfile;
+  authNotice?: { code: string; message: string } | null;
   onClose?: () => void;
   onLogout?: () => void;
   onProfileSaved: (updatedUser: UserProfile) => void;
@@ -29,6 +40,7 @@ export function OnboardingProfileModal({
   isOpen,
   mode,
   user,
+  authNotice,
   onClose,
   onLogout,
   onProfileSaved,
@@ -58,6 +70,72 @@ export function OnboardingProfileModal({
   const cpfReady = cpfDigits.length === 11;
   const cpfValid = cpfReady ? isValidCpf(cpf) : false;
 
+  const saveDirectToFirestoreFallback = async (): Promise<UserProfile> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Sessão Google expirada. Faça login novamente.');
+    }
+
+    const cleanName = name.trim().slice(0, 120);
+    const cleanPhone = phone.trim().slice(0, 40);
+    const cleanAddress = address.trim().slice(0, 280);
+    const cleanCpf = cpf.trim().slice(0, 20);
+    const publicRef = doc(db, 'users', currentUser.uid);
+    const privateRef = doc(db, 'users', currentUser.uid, 'private', 'info');
+
+    const pubSnap = await getDoc(publicRef);
+    if (!pubSnap.exists()) {
+      await setDoc(publicRef, {
+        uid: currentUser.uid,
+        displayName: cleanName,
+        points: 100,
+        tier: 'Bronze',
+        vipActive: false,
+        walletBalance: 0,
+        pendingPenalty: 0,
+        profileCompleted: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(publicRef, {
+        displayName: cleanName,
+        profileCompleted: true,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    const privSnap = await getDoc(privateRef);
+    if (!privSnap.exists()) {
+      await setDoc(privateRef, {
+        uid: currentUser.uid,
+        email: (currentUser.email || user.email || 'vip@gustavoreis.app').trim().slice(0, 160),
+        phone: cleanPhone,
+        address: cleanAddress,
+        cpf: cleanCpf,
+        photoURL: (currentUser.photoURL || user.photoUrl || '').slice(0, 500),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(privateRef, {
+        phone: cleanPhone,
+        address: cleanAddress,
+        cpf: cleanCpf,
+        photoURL: (currentUser.photoURL || user.photoUrl || '').slice(0, 500),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return {
+      ...user,
+      name: cleanName,
+      phone: cleanPhone,
+      address: cleanAddress,
+      cpf: cleanCpf,
+      profileCompleted: true,
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -81,19 +159,45 @@ export function OnboardingProfileModal({
 
     setSaving(true);
     try {
-      const res = await api.updateProfile({
-        name: name.trim(),
-        phone,
-        address: address.trim(),
-        cpf,
-      });
-      onProfileSaved(res.user);
+      let updatedUser: UserProfile;
+      try {
+        const res = await api.updateProfile({
+          name: name.trim(),
+          phone,
+          address: address.trim(),
+          cpf,
+        });
+        updatedUser = res.user;
+      } catch (apiErr: any) {
+        const status = Number(apiErr?.status || 0);
+        const msg = String(apiErr?.message || '');
+        const isBackendUnavailable =
+          status === 404 ||
+          status === 405 ||
+          status === 502 ||
+          status === 503 ||
+          status === 504 ||
+          msg.includes('JSON inválido') ||
+          msg.includes('Failed to fetch');
+
+        if (!isBackendUnavailable) {
+          throw apiErr;
+        }
+        updatedUser = await saveDirectToFirestoreFallback();
+      }
+
+      onProfileSaved(updatedUser);
       setSavedToast(true);
       if (mode === 'edit' && onClose) {
         setTimeout(() => onClose(), 700);
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Não foi possível salvar seu cadastro.');
+      const parsed = formatFirebaseError(err);
+      setErrorMsg(
+        parsed.code && parsed.code !== 'firebase/unknown-error'
+          ? `${parsed.code}: ${parsed.message}`
+          : err?.message || 'Não foi possível salvar seu cadastro.'
+      );
     } finally {
       setSaving(false);
     }
@@ -132,6 +236,22 @@ export function OnboardingProfileModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+          {authNotice && (
+            <div
+              role="alert"
+              className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-100 space-y-1"
+            >
+              <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Acesso liberado para completar seu cadastro
+              </p>
+              <p className="font-mono text-[11px] text-amber-200/90 break-all">
+                Código: {authNotice.code}
+              </p>
+              <p className="text-amber-100/90 break-words">{authNotice.message}</p>
+            </div>
+          )}
+
           {/* Account & VIP badge */}
           <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-3.5 space-y-2.5">
             <div className="flex items-center justify-between gap-3">

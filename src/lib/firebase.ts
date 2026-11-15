@@ -1,7 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
+  browserLocalPersistence,
+  setPersistence,
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -10,6 +12,7 @@ import {
 import {
   getFirestore,
   doc,
+  getDoc,
   getDocFromServer,
   setDoc,
   updateDoc,
@@ -20,12 +23,62 @@ import {
   orderBy,
   onSnapshot,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import appletFirebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
-// CRITICAL: Use the provisioned database ID from firebase-applet-config.json
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const firebaseConfig = {
+  apiKey: (env.VITE_FIREBASE_API_KEY || appletFirebaseConfig.apiKey || '').trim(),
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN || appletFirebaseConfig.authDomain || '').trim(),
+  projectId: (env.VITE_FIREBASE_PROJECT_ID || appletFirebaseConfig.projectId || '').trim(),
+  appId: (env.VITE_FIREBASE_APP_ID || appletFirebaseConfig.appId || '').trim(),
+  firestoreDatabaseId: (
+    env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+    appletFirebaseConfig.firestoreDatabaseId ||
+    ''
+  ).trim(),
+  storageBucket: (
+    env.VITE_FIREBASE_STORAGE_BUCKET ||
+    appletFirebaseConfig.storageBucket ||
+    ''
+  ).trim(),
+  messagingSenderId: (
+    env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
+    appletFirebaseConfig.messagingSenderId ||
+    ''
+  ).trim(),
+};
+
+const missingKeys = (['apiKey', 'authDomain', 'projectId', 'appId'] as const).filter(
+  (key) => !firebaseConfig[key]
+);
+
+export const firebaseConfigError: { code: string; message: string; formatted: string } | null =
+  missingKeys.length > 0
+    ? {
+        code: 'firebase/missing-config',
+        message: `Configuração Firebase incompleta (${missingKeys.join(', ')}). Verifique firebase-applet-config.json ou variáveis VITE_FIREBASE_*.`,
+        formatted: `firebase/missing-config: Configuração Firebase incompleta (${missingKeys.join(', ')}).`,
+      }
+    : null;
+
+export const app: FirebaseApp =
+  getApps().length > 0
+    ? getApp()
+    : initializeApp({
+        apiKey: firebaseConfig.apiKey,
+        authDomain: firebaseConfig.authDomain,
+        projectId: firebaseConfig.projectId,
+        appId: firebaseConfig.appId,
+        storageBucket: firebaseConfig.storageBucket || undefined,
+        messagingSenderId: firebaseConfig.messagingSenderId || undefined,
+      });
+
+// CRITICAL: Use the provisioned database ID from firebase-applet-config.json when defined
+export const db = firebaseConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -53,6 +106,56 @@ export interface FirestoreErrorInfo {
       providerId?: string | null;
       email?: string | null;
     }[];
+  };
+}
+
+export interface ParsedFirebaseError {
+  code: string;
+  message: string;
+  formatted: string;
+}
+
+export function formatFirebaseError(error: unknown): ParsedFirebaseError {
+  if (error && typeof error === 'object') {
+    const rawCode = typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : '';
+    const rawMessage = typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : String(error);
+
+    // Unwrap structured JSON thrown by handleFirestoreError if present
+    if (!rawCode && rawMessage.startsWith('{') && rawMessage.includes('"operationType"')) {
+      try {
+        const parsed = JSON.parse(rawMessage) as Partial<FirestoreErrorInfo>;
+        const innerMsg = parsed.error || rawMessage;
+        const innerCode = innerMsg.toLowerCase().includes('permission')
+          ? 'firestore/permission-denied'
+          : `firestore/${parsed.operationType || 'error'}`;
+        return {
+          code: innerCode,
+          message: innerMsg,
+          formatted: `${innerCode}: ${innerMsg}`,
+        };
+      } catch {
+        // Fall through to standard formatting
+      }
+    }
+
+    const code = rawCode || 'firebase/unknown-error';
+    const message = rawMessage || 'Erro desconhecido ao comunicar com o Firebase.';
+    return {
+      code,
+      message,
+      formatted: rawCode ? `${rawCode}: ${message}` : message,
+    };
+  }
+
+  const message = typeof error === 'string' && error.trim() ? error : 'Erro desconhecido no Firebase.';
+  return {
+    code: 'firebase/unknown-error',
+    message,
+    formatted: message,
   };
 }
 
@@ -96,7 +199,7 @@ export async function testFirestoreConnection(): Promise<{ ok: boolean; quotaExc
       return {
         ok: false,
         quotaExceeded: true,
-        upgradeUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId}/data?openUpgradeDialog=true`,
+        upgradeUrl: `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId || '(default)'}/data?openUpgradeDialog=true`,
       };
     }
     // Missing or insufficient permissions confirms active connectivity to Firestore server rules
@@ -105,6 +208,19 @@ export async function testFirestoreConnection(): Promise<{ ok: boolean; quotaExc
 }
 
 export async function signInWithGooglePopup(): Promise<FirebaseUser> {
+  if (firebaseConfigError) {
+    const err = new Error(firebaseConfigError.message) as Error & { code?: string };
+    err.code = firebaseConfigError.code;
+    throw err;
+  }
+
+  try {
+    // Prefer localStorage/IndexedDB persistence to prevent cross-domain cookie issues on Vercel
+    await setPersistence(auth, browserLocalPersistence);
+  } catch {
+    // Non-fatal if browser restricts persistence mode
+  }
+
   const result = await signInWithPopup(auth, googleProvider);
   return result.user;
 }
@@ -116,6 +232,8 @@ export async function signOutFirebase(): Promise<void> {
 export {
   onAuthStateChanged,
   doc,
+  getDoc,
+  getDocFromServer,
   setDoc,
   updateDoc,
   serverTimestamp,
