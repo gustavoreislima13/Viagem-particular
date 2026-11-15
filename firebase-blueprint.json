@@ -1,0 +1,522 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Public-safe passenger profile, VIP subscription status, and loyalty points metadata.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "points": {
+          "type": "integer"
+        },
+        "pontos": {
+          "type": "integer"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["Bronze", "Prata", "Ouro", "Black"]
+        },
+        "vipActive": {
+          "type": "boolean"
+        },
+        "isVip": {
+          "type": "boolean"
+        },
+        "vipExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "profileCompleted": {
+          "type": "boolean"
+        },
+        "walletBalance": {
+          "type": "number"
+        },
+        "pendingPenalty": {
+          "type": "number"
+        },
+        "preferences": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "vipPreferences": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "points", "tier", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Isolated PII document for authenticated user including onboarding phone, address, CPF, and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "cpf": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "preferences": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "vipPreferences": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "Ride": {
+      "title": "Ride",
+      "description": "Scheduled or completed private mobility ride with optional VIP recurrence and preferences.",
+      "type": "object",
+      "properties": {
+        "rideCode": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "clientName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "originName": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "destinationName": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "distanceKm": {
+          "type": "number"
+        },
+        "durationMin": {
+          "type": "integer"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["standard", "exec", "roundtrip"]
+        },
+        "isRoundTrip": {
+          "type": "boolean"
+        },
+        "recurrenceFrequency": {
+          "type": "string",
+          "enum": ["none", "daily", "weekly", "monthly"]
+        },
+        "preferences": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "scheduledDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "scheduledTime": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "totalOccupiedMin": {
+          "type": "integer"
+        },
+        "safetyMarginMin": {
+          "type": "integer"
+        },
+        "roundTripMode": {
+          "type": "string",
+          "enum": ["continuous", "scheduled_return"]
+        },
+        "waitTimeMin": {
+          "type": "integer"
+        },
+        "returnDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "returnTime": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "price": {
+          "type": "number"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "paymentStatus": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "walletDeducted": {
+          "type": "number"
+        },
+        "remainingDue": {
+          "type": "number"
+        },
+        "penaltyIncluded": {
+          "type": "number"
+        },
+        "pointsEarned": {
+          "type": "integer"
+        },
+        "pointsRedeemed": {
+          "type": "integer"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Confirmado", "Em Andamento", "Concluído", "Cancelado"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "rideCode",
+        "userId",
+        "clientName",
+        "originName",
+        "destinationName",
+        "distanceKm",
+        "durationMin",
+        "category",
+        "isRoundTrip",
+        "scheduledDate",
+        "scheduledTime",
+        "price",
+        "pointsEarned",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Driver operational expense record.",
+      "type": "object",
+      "properties": {
+        "adminUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "amount": {
+          "type": "number"
+        },
+        "expenseDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["adminUid", "category", "description", "amount", "expenseDate", "createdAt"]
+    },
+    "Voucher": {
+      "title": "Voucher",
+      "description": "VIP reward voucher redeemed by a user.",
+      "type": "object",
+      "properties": {
+        "voucherCode": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "discountValue": {
+          "type": "number"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["voucherCode", "userId", "title", "discountValue", "used", "createdAt"]
+    },
+    "PartnerStore": {
+      "title": "PartnerStore",
+      "description": "Partner store profile readable by authenticated users and managed exclusively by admin reisanselmo7@gmail.com.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "logoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["name", "active", "createdAt"]
+    },
+    "PartnerRaffle": {
+      "title": "PartnerRaffle",
+      "description": "Partner store prize raffle available to active Clube VIP R$ 12,90/month subscribers.",
+      "type": "object",
+      "properties": {
+        "partnerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "partnerLogoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "prizeTitle": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "prizeDescription": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "drawDate": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["partnerName", "prizeTitle", "drawDate", "active", "createdAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global tariff and brand settings.",
+      "type": "object",
+      "properties": {
+        "standardKm": {
+          "type": "number"
+        },
+        "execKm": {
+          "type": "number"
+        },
+        "roundTripKm": {
+          "type": "number"
+        },
+        "minFare": {
+          "type": "number"
+        },
+        "estimatedCostPerKm": {
+          "type": "number"
+        },
+        "minMarginPct": {
+          "type": "number"
+        },
+        "maxMarginPct": {
+          "type": "number"
+        },
+        "safetyMarginMin": {
+          "type": "integer"
+        },
+        "pixKey": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "whatsapp": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["standardKm", "execKm", "roundTripKm", "minFare", "pixKey", "whatsapp", "updatedAt"]
+    },
+    "WalletTopup": {
+      "title": "WalletTopup",
+      "description": "Digital wallet Pix top-up request created by passenger and approved strictly by admin.",
+      "type": "object",
+      "properties": {
+        "requestCode": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "amount": {
+          "type": "number"
+        },
+        "pixKey": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pendente", "Aprovado", "Rejeitado"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["requestCode", "userId", "amount", "pixKey", "status", "createdAt"]
+    },
+    "VipRequest": {
+      "title": "VipRequest",
+      "description": "Clube VIP payment notification created by passenger after Mercado Pago checkout and approved strictly by admin.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "amount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pendente", "Aprovado", "Rejeitado"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "amount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public-safe passenger VIP tier, subscription, wallet summary, and points."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Split PII subcollection containing email, phone, address, CPF, and avatar URL."
+    },
+    "/users/{userId}/vouchers/{voucherId}": {
+      "schema": { "$ref": "#/entities/Voucher" },
+      "description": "Redeemed VIP discount vouchers belonging to userId."
+    },
+    "/rides/{rideId}": {
+      "schema": { "$ref": "#/entities/Ride" },
+      "description": "Private mobility rides owned by userId and managed by admin."
+    },
+    "/walletTopups/{topupId}": {
+      "schema": { "$ref": "#/entities/WalletTopup" },
+      "description": "Wallet Pix top-up requests reviewed exclusively by admin."
+    },
+    "/vipRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/VipRequest" },
+      "description": "Clube VIP payment notifications reviewed exclusively by admin."
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Admin-only operational expenses."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Global pricing and driver contact settings."
+    },
+    "/partners/{partnerId}": {
+      "schema": { "$ref": "#/entities/PartnerStore" },
+      "description": "Partner stores readable by authenticated users and managed exclusively by admin reisanselmo7@gmail.com."
+    },
+    "/partnerRaffles/{raffleId}": {
+      "schema": { "$ref": "#/entities/PartnerRaffle" },
+      "description": "Partner store raffles readable by authenticated users and managed exclusively by admin reisanselmo7@gmail.com."
+    }
+  }
+}

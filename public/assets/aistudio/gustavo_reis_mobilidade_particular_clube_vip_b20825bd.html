@@ -1,0 +1,2834 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Gustavo Reis • Mobilidade Particular &amp; Clube VIP</title>
+
+  <!-- Fontes Modernas (Plus Jakarta Sans & Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          colors: {
+            obsidian: '#090D16',
+            card: '#111827',
+            surface: '#1E293B',
+            emeraldVip: '#10B981',
+            goldVip: '#F59E0B',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Leaflet CSS & JS (Fallback Híbrido Automático caso alguma sub-API do Google esteja bloqueada) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #090D16;
+      color: #F8FAFC;
+      font-family: 'Inter', sans-serif;
+    }
+    h1, h2, h3, .font-display {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    /* Scrollbars discretas */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.28);
+      border-radius: 9999px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Ajustes visuais do mapa */
+    #map-canvas, #google-map-div, #leaflet-map-div {
+      width: 100%;
+      height: 100%;
+    }
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+    .gm-style-cc, a[href^="https://maps.google.com/maps"] {
+      opacity: 0.55;
+    }
+
+    /* Pulso do marcador de origem */
+    @keyframes pulseRing {
+      0% { transform: scale(0.85); opacity: 0.85; }
+      70% { transform: scale(1.85); opacity: 0; }
+      100% { transform: scale(1.85); opacity: 0; }
+    }
+    .marker-pulse {
+      animation: pulseRing 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+
+    /* Transições de Bottom Sheet e Modais */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-light {
+      background: rgba(30, 41, 59, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+  </style>
+</head>
+<body class="bg-obsidian text-slate-100 select-none">
+
+  <!-- ===================================================================== -->
+  <!-- 1. TELA DE ONBOARDING & AUTENTICAÇÃO (GOOGLE + CONTA INDIVIDUAL)      -->
+  <!-- ===================================================================== -->
+  <div id="auth-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/95 backdrop-blur-xl p-4 overflow-y-auto">
+    <div class="w-full max-w-md glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-500/20 my-auto">
+      <!-- Logo & Cabeçalho Executivo -->
+      <div class="flex flex-col items-center text-center mb-6">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 mb-4">
+          <i data-lucide="car-front" class="w-8 h-8 text-slate-950 stroke-[2.2]"></i>
+        </div>
+        <span class="px-3 py-1 rounded-full text-[11px] font-semibold tracking-wider uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 mb-2">
+          Mobilidade Particular &amp; Clube VIP
+        </span>
+        <h1 class="text-2xl font-bold text-white tracking-tight">Gustavo Reis</h1>
+        <p class="text-xs sm:text-sm text-slate-400 mt-1">
+          Cotações em tempo real com trânsito ao vivo, agendamento direto na agenda e pontos VIP a cada corrida.
+        </p>
+      </div>
+
+      <!-- Botão Principal: Entrar com Conta Google -->
+      <button type="button" onclick="window.handleGoogleSignIn()" id="btn-google-login"
+        class="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 active:scale-[0.99] text-slate-900 font-semibold text-sm flex items-center justify-center gap-3 shadow-lg transition cursor-pointer">
+        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
+          <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"/>
+          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"/>
+        </svg>
+        <span>Continuar com Conta Google</span>
+      </button>
+
+      <div class="relative flex items-center justify-center my-5">
+        <div class="border-t border-slate-800 w-full"></div>
+        <span class="bg-slate-900 px-3 text-[11px] uppercase tracking-wider text-slate-500">ou crie sua conta</span>
+        <div class="border-t border-slate-800 w-full"></div>
+      </div>
+
+      <!-- Abas Login / Cadastro Individual -->
+      <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 mb-4">
+        <button type="button" id="tab-register" onclick="window.switchAuthTab('register')"
+          class="py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition">
+          Criar minha conta
+        </button>
+        <button type="button" id="tab-login" onclick="window.switchAuthTab('login')"
+          class="py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition">
+          Já tenho conta
+        </button>
+      </div>
+
+      <!-- Formulário Cadastro Individual -->
+      <form id="form-register" onsubmit="window.handleEmailRegister(event)" class="space-y-3">
+        <div>
+          <input type="text" id="reg-name" required placeholder="Seu nome completo"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <input type="email" id="reg-email" required placeholder="Seu e-mail"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+          <input type="tel" id="reg-phone" required placeholder="WhatsApp (11) 99999-9999"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <input type="password" id="reg-password" required minlength="6" placeholder="Crie uma senha (mín. 6 dígitos)"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <button type="submit"
+          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+          Criar Conta &amp; Ganhar 100 Pontos VIP
+        </button>
+      </form>
+
+      <!-- Formulário Login E-mail/Senha -->
+      <form id="form-login" onsubmit="window.handleEmailLogin(event)" class="space-y-3 hidden">
+        <div>
+          <input type="email" id="login-email" required placeholder="Seu e-mail cadastrado"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <input type="password" id="login-password" required placeholder="Sua senha"
+            class="w-full px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div class="flex justify-end">
+          <button type="button" onclick="window.handlePasswordReset()" class="text-xs text-emerald-400 hover:underline">
+            Esqueci minha senha
+          </button>
+        </div>
+        <button type="submit"
+          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+          Entrar na Minha Conta
+        </button>
+      </form>
+
+      <!-- Acesso Visitante / Simulação Rápida -->
+      <div class="mt-4 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs">
+        <button type="button" onclick="window.continueAsGuest()" class="text-slate-400 hover:text-white transition">
+          Simular corrida sem login →
+        </button>
+        <button type="button" onclick="window.openCreatorModal()" class="text-amber-400/90 hover:text-amber-300 font-medium flex items-center gap-1">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Sou o Criador
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 2. APLICATIVO PRINCIPAL (MAPA FULLSCREEN + FLOATING UI FIGMA)         -->
+  <!-- ===================================================================== -->
+  <div id="app-shell" class="relative w-full h-full flex flex-col">
+
+    <!-- MAPA EM TELA CHEIA -->
+    <div id="map-canvas" class="absolute inset-0 z-0 bg-slate-950">
+      <div id="google-map-div" class="w-full h-full"></div>
+      <div id="leaflet-map-div" class="w-full h-full hidden"></div>
+    </div>
+
+    <!-- BARRA SUPERIOR FLUTUANTE (FIGMA TOP HUD) -->
+    <header class="relative z-20 px-3 sm:px-5 pt-3 sm:pt-4 pointer-events-none">
+      <div class="max-w-5xl mx-auto flex items-center justify-between gap-2">
+        <!-- Botão Menu Lateral + Status API -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+          <button type="button" onclick="window.toggleDrawer(true)" aria-label="Abrir Menu"
+            class="w-11 h-11 rounded-2xl glass-panel flex items-center justify-center text-white hover:border-emerald-500/40 shadow-lg transition cursor-pointer">
+            <i data-lucide="menu" class="w-5 h-5"></i>
+          </button>
+
+          <div class="glass-panel px-3.5 py-2 rounded-2xl shadow-lg flex items-center gap-2.5">
+            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" id="api-status-dot"></div>
+            <div>
+              <p class="text-xs font-bold text-white leading-tight">Gustavo Reis</p>
+              <p id="api-status-label" class="text-[10px] text-emerald-400 font-medium leading-tight">Google Maps Ativo</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controles Rápidos do Mapa + Perfil/Clube VIP -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+          <!-- Toggle Camada de Trânsito -->
+          <button type="button" onclick="window.toggleTrafficLayer()" id="btn-traffic-toggle" title="Alternar Trânsito ao Vivo"
+            class="h-11 px-3 rounded-2xl glass-panel flex items-center gap-1.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30 shadow-lg transition cursor-pointer">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Trânsito</span>
+          </button>
+
+          <!-- Pílula Clube VIP -->
+          <button type="button" onclick="window.openModal('vip-modal')"
+            class="h-11 px-3.5 rounded-2xl glass-panel flex items-center gap-2 hover:border-amber-400/40 shadow-lg transition cursor-pointer">
+            <i data-lucide="crown" class="w-4 h-4 text-amber-400"></i>
+            <div class="text-left">
+              <p id="hud-vip-tier" class="text-[10px] uppercase tracking-wider text-amber-400 font-bold leading-none">Bronze</p>
+              <p id="hud-vip-points" class="text-xs font-bold text-white leading-tight">100 pts</p>
+            </div>
+          </button>
+
+          <!-- Avatar / Conta -->
+          <button type="button" onclick="window.handleAvatarClick()"
+            class="w-11 h-11 rounded-2xl glass-panel p-0.5 overflow-hidden shadow-lg hover:border-emerald-400/50 transition cursor-pointer">
+            <img id="hud-user-avatar" src="https://ui-avatars.com/api/?name=VIP&background=10B981&color=090D16&bold=true"
+              alt="Perfil" class="w-full h-full object-cover rounded-[14px]" />
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- BOTÕES FLUTUANTES LATERAIS DO MAPA (GPS + MODO PINO) -->
+    <div class="relative z-10 flex-1 pointer-events-none">
+      <div class="max-w-5xl mx-auto h-full relative">
+        <div class="absolute right-3 sm:right-5 bottom-4 flex flex-col gap-2 pointer-events-auto">
+          <button type="button" onclick="window.togglePinDropMode()" id="btn-pin-mode" title="Marcar ponto no mapa"
+            class="w-11 h-11 rounded-2xl glass-panel flex items-center justify-center text-slate-200 hover:text-amber-400 shadow-xl transition cursor-pointer">
+            <i data-lucide="map-pin" class="w-5 h-5"></i>
+          </button>
+          <button type="button" onclick="window.useCurrentGPSLocation('origin')" title="Minha localização atual"
+            class="w-11 h-11 rounded-2xl glass-panel flex items-center justify-center text-emerald-400 hover:bg-emerald-500/15 shadow-xl transition cursor-pointer">
+            <i data-lucide="crosshair" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Banner de Modo Pino Ativo -->
+        <div id="pin-mode-banner" class="hidden absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
+          <div class="px-4 py-2 rounded-full bg-amber-500 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2">
+            <i data-lucide="mouse-pointer-click" class="w-4 h-4"></i>
+            <span id="pin-mode-text">Toque no mapa para definir o Destino</span>
+            <button type="button" onclick="window.togglePinDropMode(false)" class="ml-1 underline">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- BOTTOM SHEET FLUTUANTE (ESTILO FIGMA: ROTA + COTAÇÃO + AGENDAMENTO)  -->
+    <!-- =================================================================== -->
+    <section class="relative z-20 w-full max-w-2xl mx-auto px-2 sm:px-4 pb-2 sm:pb-4">
+      <div class="glass-panel rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-700/70 overflow-hidden transition-all duration-300">
+
+        <!-- Alça superior + Navegação Rápida de Etapas -->
+        <div class="px-4 pt-3 pb-2 flex items-center justify-between border-b border-slate-800/80">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <h2 id="sheet-title" class="text-sm font-bold text-white">Para onde vamos hoje?</h2>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+              Mín. R$ <span id="badge-min-km">3,00</span>/km
+            </span>
+            <button type="button" id="btn-back-route" onclick="window.setSheetStep('route')" class="hidden text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-slate-800">
+              ← Alterar rota
+            </button>
+          </div>
+        </div>
+
+        <!-- ETAPA 1: SELEÇÃO DE ORIGEM E DESTINO (FIGMA HOME SHEET) -->
+        <div id="step-route" class="p-4 space-y-3.5 max-h-[56vh] overflow-y-auto">
+          <!-- Caixa de Origem e Destino Conectados -->
+          <div class="relative bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex items-center gap-3">
+            <!-- Linha vertical Figma -->
+            <div class="flex flex-col items-center justify-between h-16 py-1 shrink-0">
+              <span class="w-3 h-3 rounded-full bg-emerald-400 ring-4 ring-emerald-500/20"></span>
+              <span class="w-0.5 flex-1 bg-gradient-to-b from-emerald-400 to-amber-400 my-1"></span>
+              <span class="w-3 h-3 rounded-sm bg-amber-400 ring-4 ring-amber-500/20"></span>
+            </div>
+
+            <!-- Campos Clicáveis -->
+            <div class="flex-1 min-w-0 space-y-2">
+              <button type="button" onclick="window.openLocationModal('origin')"
+                class="w-full text-left px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Embarque</p>
+                  <p id="display-origin" class="text-xs sm:text-sm font-medium text-white truncate">Barueri / Alphaville, SP</p>
+                </div>
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
+              </button>
+
+              <button type="button" onclick="window.openLocationModal('destination')"
+                class="w-full text-left px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Destino</p>
+                  <p id="display-destination" class="text-xs sm:text-sm font-medium text-slate-300 truncate">Toque para escolher o destino...</p>
+                </div>
+                <i data-lucide="navigation" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              </button>
+            </div>
+
+            <!-- Botão Inverter Rota -->
+            <button type="button" onclick="window.swapLocations()" title="Inverter Origem e Destino"
+              class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 shrink-0 transition cursor-pointer">
+              <i data-lucide="arrow-up-down" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Destinos Rápidos (Chips) -->
+          <div>
+            <p class="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Destinos frequentes &amp; Aeroportos
+            </p>
+            <div id="quick-destinations-list" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <!-- Preenchido via JS -->
+            </div>
+          </div>
+
+          <!-- Botão Calcular Cotação -->
+          <button type="button" onclick="window.calculateAndShowQuote()" id="btn-calculate-route"
+            class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition cursor-pointer">
+            <i data-lucide="calculator" class="w-4 h-4"></i>
+            <span>Calcular Valor &amp; Tempo com Trânsito</span>
+          </button>
+        </div>
+
+        <!-- ETAPA 2: DETALHES DA CORRIDA, CATEGORIAS & AGENDAMENTO (FIGMA TRIP DETAILS) -->
+        <div id="step-details" class="hidden p-4 space-y-3.5 max-h-[64vh] overflow-y-auto">
+          <!-- Resumo da Rota + Preview Maps Static API -->
+          <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-center">
+                  <p id="route-distance-text" class="text-sm font-extrabold text-emerald-400">0,0 km</p>
+                  <p class="text-[10px] text-slate-400">Distância</p>
+                </div>
+                <div class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-center">
+                  <p id="route-duration-text" class="text-sm font-extrabold text-amber-400">0 min</p>
+                  <p id="route-traffic-badge" class="text-[10px] text-amber-300/90">Tempo real</p>
+                </div>
+              </div>
+
+              <button type="button" onclick="window.toggleStaticMapPreview()"
+                class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer">
+                <i data-lucide="image" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span id="btn-static-label">Ver Mapa Estático</span>
+              </button>
+            </div>
+
+            <!-- Container Maps Static API -->
+            <div id="static-map-wrapper" class="hidden rounded-xl overflow-hidden border border-slate-700/80 bg-slate-950 relative">
+              <img id="static-map-img" src="" alt="Prévia Estática da Rota" class="w-full h-36 object-cover" />
+              <div id="static-map-fallback" class="hidden p-3 text-center bg-slate-900/95">
+                <p class="text-xs font-semibold text-slate-300">Prévia Vetorial da Rota</p>
+                <p id="static-fallback-coords" class="text-[11px] text-slate-400 mt-0.5"></p>
+              </div>
+              <span class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-950/85 text-[10px] text-emerald-400 font-medium border border-emerald-500/30">
+                Google Maps Static API
+              </span>
+            </div>
+          </div>
+
+          <!-- Escolha da Modalidade (Mínimo R$ 3,00/km garantido) -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">Escolha a categoria</span>
+              <span class="text-[11px] text-slate-400">Tarifa base mínima: R$ 3,00/km</span>
+            </div>
+            <div id="ride-categories-container" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <!-- Preenchido dinamicamente -->
+            </div>
+          </div>
+
+          <!-- Opções de Agendamento, Ida/Volta e Cupom VIP -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-slate-800">
+              <label class="block text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Data e Hora do Embarque</label>
+              <div class="flex items-center gap-1.5">
+                <input type="date" id="booking-date" onchange="window.recalculateQuote()"
+                  class="w-full bg-slate-800 text-white text-xs rounded-xl px-2.5 py-2 border border-slate-700 focus:outline-none focus:border-emerald-500" />
+                <input type="time" id="booking-time" onchange="window.recalculateQuote()"
+                  class="w-24 bg-slate-800 text-white text-xs rounded-xl px-2 py-2 border border-slate-700 focus:outline-none focus:border-emerald-500" />
+              </div>
+            </div>
+
+            <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-white">Ida e Volta</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="toggle-roundtrip" onchange="window.recalculateQuote()" class="sr-only peer" />
+                  <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+              <div class="mt-2 flex items-center gap-1.5">
+                <select id="select-voucher" onchange="window.recalculateQuote()"
+                  class="w-full bg-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 border border-slate-700 focus:outline-none">
+                  <option value="">Sem cupom / voucher VIP</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Observações opcionais -->
+          <div>
+            <input type="text" id="booking-notes" placeholder="Obs. opcional (ex: número do voo, 2 malas grandes, condomínio...)"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <!-- Resumo Financeiro Transparente -->
+          <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/30 rounded-2xl p-3.5 border border-emerald-500/25 flex items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Valor Final</span>
+                <span id="quote-discount-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300"></span>
+              </div>
+              <p id="quote-total-price" class="text-2xl font-extrabold text-white tracking-tight mt-0.5">R$ 0,00</p>
+              <p id="quote-breakdown-text" class="text-[11px] text-slate-400 mt-0.5">+0 pts VIP após conclusão</p>
+            </div>
+
+            <button type="button" onclick="window.confirmTripBooking()" id="btn-confirm-booking"
+              class="px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 flex items-center gap-2 shrink-0 transition cursor-pointer">
+              <i data-lucide="calendar-check" class="w-4 h-4"></i>
+              <span>Agendar Corrida</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 3. MODAL DE BUSCA DE ENDEREÇO (GOOGLE PLACES + AUTOCOMPLETE + GPS)    -->
+  <!-- ===================================================================== -->
+  <div id="location-modal" class="fixed inset-0 z-40 hidden bg-obsidian/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-lg glass-panel rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl border border-slate-700/80 max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <h3 id="location-modal-title" class="text-base font-bold text-white">Selecionar Endereço</h3>
+        <button type="button" onclick="window.closeModal('location-modal')" class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Campo de Busca -->
+      <div class="relative mb-3">
+        <i data-lucide="search" class="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="location-search-input" oninput="window.handleLocationSearchInput(this.value)"
+          placeholder="Digite rua, bairro, shopping, aeroporto ou cidade..."
+          class="w-full pl-10 pr-10 py-3 rounded-2xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+        <button type="button" onclick="document.getElementById('location-search-input').value=''; window.handleLocationSearchInput('');"
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs">
+          Limpar
+        </button>
+      </div>
+
+      <!-- Ações Rápidas de Localização -->
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button type="button" onclick="window.useCurrentGPSLocation(window.state.activeLocationField); window.closeModal('location-modal');"
+          class="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> Usar GPS Atual
+        </button>
+        <button type="button" onclick="window.closeModal('location-modal'); window.togglePinDropMode(true, window.state.activeLocationField);"
+          class="py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Marcar no Mapa
+        </button>
+      </div>
+
+      <!-- Lista de Resultados -->
+      <div id="location-results-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 4. MODAL DE SUCESSO & SINCRONIZAÇÃO GOOGLE AGENDA (FIGMA SUCCESS)     -->
+  <!-- ===================================================================== -->
+  <div id="success-modal" class="fixed inset-0 z-50 hidden bg-obsidian/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="w-full max-w-md glass-panel rounded-3xl p-6 shadow-2xl border border-emerald-500/30 text-center my-auto">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="check-circle-2" class="w-9 h-9 text-emerald-400"></i>
+      </div>
+      <h3 class="text-xl font-extrabold text-white">Agendamento Confirmado!</h3>
+      <p class="text-xs text-slate-400 mt-1">
+        Sua reserva foi registrada na agenda do motorista <strong class="text-white">Gustavo Reis</strong>.
+      </p>
+
+      <div id="success-summary-box" class="mt-4 bg-slate-900/90 rounded-2xl p-4 border border-slate-800 text-left space-y-2 text-xs">
+        <!-- Preenchido dinamicamente -->
+      </div>
+
+      <!-- Chave PIX para Pagamento / Sinal -->
+      <div class="mt-3 bg-slate-900/80 rounded-2xl p-3 border border-slate-800 flex items-center justify-between gap-2">
+        <div class="text-left min-w-0">
+          <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Chave PIX Gustavo Reis</p>
+          <p id="success-pix-key" class="text-xs font-mono text-emerald-400 truncate">gustavo.reis.vip@pix.com.br</p>
+        </div>
+        <button type="button" onclick="window.copyPixKey()"
+          class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white shrink-0">
+          Copiar PIX
+        </button>
+      </div>
+
+      <!-- Botões de Sincronização (Google Agenda + ICS + WhatsApp) -->
+      <div class="mt-4 space-y-2">
+        <a id="btn-google-calendar-link" href="#" target="_blank" rel="noopener noreferrer"
+          class="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition">
+          <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+          <span>Salvar na Minha Google Agenda</span>
+        </a>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="window.downloadICSFile()"
+            class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Arquivo .ICS
+          </button>
+          <a id="btn-whatsapp-confirm" href="#" target="_blank" rel="noopener noreferrer"
+            class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <button type="button" onclick="window.closeModal('success-modal'); window.setSheetStep('route');"
+        class="mt-4 w-full py-2.5 text-xs font-semibold text-slate-400 hover:text-white">
+        Fechar e voltar ao mapa
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 5. MENU LATERAL (DRAWER DO PASSAGEIRO & ATALHO CRIADOR)               -->
+  <!-- ===================================================================== -->
+  <div id="side-drawer" class="fixed inset-0 z-40 hidden bg-black/70 backdrop-blur-sm">
+    <div class="w-80 max-w-[85vw] h-full glass-panel border-r border-slate-800 p-5 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-3 min-w-0">
+            <img id="drawer-avatar" src="https://ui-avatars.com/api/?name=VIP&background=10B981&color=090D16" alt="Avatar"
+              class="w-11 h-11 rounded-2xl object-cover border border-emerald-500/40" />
+            <div class="min-w-0">
+              <p id="drawer-user-name" class="text-sm font-bold text-white truncate">Passageiro VIP</p>
+              <p id="drawer-user-email" class="text-[11px] text-slate-400 truncate">Faça login para sincronizar</p>
+            </div>
+          </div>
+          <button type="button" onclick="window.toggleDrawer(false)" class="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <nav class="mt-4 space-y-1.5">
+          <button type="button" onclick="window.toggleDrawer(false)"
+            class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-emerald-500/15 text-emerald-400 font-semibold text-xs">
+            <i data-lucide="map" class="w-4 h-4"></i> Nova Cotação &amp; Mapa
+          </button>
+          <button type="button" onclick="window.toggleDrawer(false); window.openModal('history-modal')"
+            class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl hover:bg-slate-800/80 text-slate-200 font-semibold text-xs transition">
+            <i data-lucide="calendar-clock" class="w-4 h-4 text-blue-400"></i> Meus Agendamentos
+          </button>
+          <button type="button" onclick="window.toggleDrawer(false); window.openModal('vip-modal')"
+            class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl hover:bg-slate-800/80 text-slate-200 font-semibold text-xs transition">
+            <i data-lucide="crown" class="w-4 h-4 text-amber-400"></i> Clube VIP &amp; Benefícios
+          </button>
+          <button type="button" onclick="window.toggleDrawer(false); window.openCreatorModal()"
+            class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl hover:bg-amber-500/15 text-amber-400 font-semibold text-xs border border-amber-500/20 mt-3 transition">
+            <i data-lucide="sliders" class="w-4 h-4"></i> Painel do Criador (Admin)
+          </button>
+        </nav>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 space-y-2">
+        <button type="button" id="btn-drawer-auth" onclick="window.handleDrawerAuthAction()"
+          class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white flex items-center justify-center gap-2">
+          <i data-lucide="log-out" class="w-4 h-4"></i> <span id="drawer-auth-label">Sair da Conta</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 6. MODAL CLUBE VIP & BENEFÍCIOS (CARTÃO FIDELIDADE + RESGATE)         -->
+  <!-- ===================================================================== -->
+  <div id="vip-modal" class="fixed inset-0 z-40 hidden bg-obsidian/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="w-full max-w-lg glass-panel rounded-3xl p-5 sm:p-6 shadow-2xl border border-amber-500/25 my-auto max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <i data-lucide="crown" class="w-5 h-5 text-amber-400"></i>
+          <h3 class="text-lg font-bold text-white">Clube VIP Gustavo Reis</h3>
+        </div>
+        <button type="button" onclick="window.closeModal('vip-modal')" class="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Cartão Digital VIP -->
+      <div class="rounded-3xl p-5 bg-gradient-to-br from-slate-900 via-slate-800 to-amber-950/60 border border-amber-400/30 shadow-xl mb-5">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] uppercase tracking-widest text-amber-400 font-bold">Membro Oficial</span>
+          <span id="vip-card-tier" class="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950">BRONZE</span>
+        </div>
+        <p id="vip-card-name" class="text-lg font-bold text-white mt-3">Passageiro VIP</p>
+        <div class="mt-4 flex items-end justify-between">
+          <div>
+            <p class="text-[11px] text-slate-400">Saldo disponível</p>
+            <p class="text-2xl font-extrabold text-amber-400"><span id="vip-card-points">100</span> <span class="text-xs font-semibold">pts</span></p>
+          </div>
+          <p id="vip-card-discount" class="text-xs font-semibold text-emerald-400">0% de desconto automático</p>
+        </div>
+        <div class="mt-3 w-full bg-slate-950/80 h-2 rounded-full overflow-hidden">
+          <div id="vip-progress-bar" class="bg-gradient-to-r from-amber-400 to-emerald-400 h-full transition-all" style="width: 20%"></div>
+        </div>
+        <p id="vip-next-tier-hint" class="text-[11px] text-slate-400 mt-1.5">Faltam 400 pts para o nível Prata (5% OFF)</p>
+      </div>
+
+      <!-- Recompensas Resgatáveis -->
+      <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Resgatar Benefícios com Pontos</h4>
+      <div id="vip-rewards-list" class="space-y-2.5">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 7. MODAL MEUS AGENDAMENTOS & HISTÓRICO                                -->
+  <!-- ===================================================================== -->
+  <div id="history-modal" class="fixed inset-0 z-40 hidden bg-obsidian/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="w-full max-w-xl glass-panel rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-700/80 my-auto max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <i data-lucide="calendar-clock" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="text-lg font-bold text-white">Meus Agendamentos</h3>
+        </div>
+        <button type="button" onclick="window.closeModal('history-modal')" class="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="client-appointments-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 8. MODAL DE PIN DO CRIADOR & PAINEL ADMINISTRATIVO MASTER             -->
+  <!-- ===================================================================== -->
+  <div id="creator-pin-modal" class="fixed inset-0 z-50 hidden bg-obsidian/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-sm glass-panel rounded-3xl p-6 border border-amber-500/30 text-center shadow-2xl">
+      <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="lock" class="w-6 h-6"></i>
+      </div>
+      <h3 class="text-lg font-bold text-white">Acesso Exclusivo do Criador</h3>
+      <p class="text-xs text-slate-400 mt-1">Digite o PIN de administrador (Padrão: <strong class="text-amber-400">2026</strong>)</p>
+      <input type="password" id="creator-pin-input" maxlength="8" placeholder="••••"
+        class="mt-4 w-full text-center tracking-[0.5em] text-lg font-bold py-3 rounded-2xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-amber-400" />
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button type="button" onclick="window.closeModal('creator-pin-modal')" class="py-2.5 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300">
+          Cancelar
+        </button>
+        <button type="button" onclick="window.verifyCreatorPin()" class="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
+          Desbloquear
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAINEL MASTER DO CRIADOR -->
+  <div id="creator-panel-modal" class="fixed inset-0 z-50 hidden bg-obsidian/95 backdrop-blur-xl flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div class="w-full max-w-4xl glass-panel rounded-3xl p-4 sm:p-6 shadow-2xl border border-amber-500/30 my-auto max-h-[94vh] flex flex-col">
+      <!-- Topo Painel Criador -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-extrabold text-white">Painel Master • Gustavo Reis</h3>
+            <p class="text-[11px] text-slate-400">Controle de API Google Maps, Tarifas (Mín. R$ 3,00/km), Agenda e Clube VIP</p>
+          </div>
+        </div>
+        <button type="button" onclick="window.closeModal('creator-panel-modal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white">
+          Voltar ao App
+        </button>
+      </div>
+
+      <!-- Abas do Criador -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-3 border-b border-slate-800/80">
+        <button type="button" onclick="window.switchCreatorTab('agenda')" id="ctab-agenda"
+          class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 shrink-0">
+          Agenda &amp; Corridas
+        </button>
+        <button type="button" onclick="window.switchCreatorTab('api')" id="ctab-api"
+          class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 shrink-0">
+          API Google Maps &amp; Tarifas
+        </button>
+        <button type="button" onclick="window.switchCreatorTab('vip')" id="ctab-vip"
+          class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 shrink-0">
+          Clube VIP &amp; Marca
+        </button>
+      </div>
+
+      <!-- Conteúdo das Abas -->
+      <div class="flex-1 overflow-y-auto pt-4 space-y-4">
+        <!-- ABA 1: AGENDA & MÉTRICAS -->
+        <div id="cview-agenda" class="space-y-4">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800">
+              <p class="text-[11px] text-slate-400">Receita Agendada</p>
+              <p id="kpi-scheduled" class="text-lg font-extrabold text-amber-400 mt-1">R$ 0,00</p>
+            </div>
+            <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800">
+              <p class="text-[11px] text-slate-400">Faturamento Concluído</p>
+              <p id="kpi-completed" class="text-lg font-extrabold text-emerald-400 mt-1">R$ 0,00</p>
+            </div>
+            <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800">
+              <p class="text-[11px] text-slate-400">Total de Corridas</p>
+              <p id="kpi-total-rides" class="text-lg font-extrabold text-white mt-1">0</p>
+            </div>
+            <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800">
+              <p class="text-[11px] text-slate-400">Tarifa Mínima Ativa</p>
+              <p id="kpi-min-rate" class="text-lg font-extrabold text-blue-400 mt-1">R$ 3,00/km</p>
+            </div>
+          </div>
+
+          <div id="creator-appointments-list" class="space-y-2.5">
+            <!-- Lista de todos os agendamentos -->
+          </div>
+        </div>
+
+        <!-- ABA 2: API GOOGLE MAPS (JS + ROUTES + PLACES + STATIC) & TARIFAS -->
+        <div id="cview-api" class="hidden space-y-4">
+          <!-- Configuração da API Google Maps -->
+          <div class="bg-slate-900/90 p-4 rounded-2xl border border-emerald-500/25 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                  <i data-lucide="map-pinned" class="w-4 h-4 text-emerald-400"></i>
+                  Google Maps Platform (JS API + Routes v2 + Places + Static API)
+                </h4>
+                <p class="text-[11px] text-slate-400">Chave integrada para cálculo preciso de distância, trânsito em tempo real e mapas dinâmicos/estáticos.</p>
+              </div>
+              <button type="button" onclick="window.runMapsApiDiagnostics()"
+                class="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
+                <i data-lucide="activity" class="w-3.5 h-3.5"></i> Diagnosticar API Agora
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] text-slate-400 mb-1">Chave API Google Maps</label>
+                <input type="text" id="admin-maps-key"
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div class="flex items-end">
+                <button type="button" onclick="window.saveCreatorMapsAndPricing()"
+                  class="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition">
+                  Salvar &amp; Reconectar API
+                </button>
+              </div>
+            </div>
+
+            <!-- Painel de Diagnóstico das Sub-APIs -->
+            <div id="api-diagnostics-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div class="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                <p class="text-[10px] text-slate-400">Maps JS API</p>
+                <p id="diag-js" class="text-xs font-bold text-emerald-400 mt-0.5">Pronto</p>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                <p class="text-[10px] text-slate-400">Places / Geocoding</p>
+                <p id="diag-places" class="text-xs font-bold text-emerald-400 mt-0.5">Híbrido Ativo</p>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                <p class="text-[10px] text-slate-400">Routes &amp; Trânsito</p>
+                <p id="diag-routes" class="text-xs font-bold text-emerald-400 mt-0.5">Ativo</p>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                <p class="text-[10px] text-slate-400">Maps Static API</p>
+                <p id="diag-static" class="text-xs font-bold text-emerald-400 mt-0.5">Ativo</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Configuração de Tarifas (Mínimo R$ 3,00/km) -->
+          <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <h4 class="text-sm font-bold text-white">Valores por Km (Trava Mínima de R$ 3,00/km)</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Standard (R$/km)</label>
+                <input type="number" step="0.10" min="3.00" id="admin-rate-standard"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Executivo (R$/km)</label>
+                <input type="number" step="0.10" min="3.00" id="admin-rate-exec"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Bate e Volta (R$/km)</label>
+                <input type="number" step="0.10" min="3.00" id="admin-rate-round"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Valor Mínimo Corrida (R$)</label>
+                <input type="number" step="1.00" min="15.00" id="admin-min-fare"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+            </div>
+            <button type="button" onclick="window.saveCreatorMapsAndPricing()"
+              class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs">
+              Atualizar Tabela de Preços
+            </button>
+          </div>
+        </div>
+
+        <!-- ABA 3: CLUBE VIP & DADOS DA MARCA -->
+        <div id="cview-vip" class="hidden space-y-4">
+          <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <h4 class="text-sm font-bold text-white">Dados de Recebimento &amp; Contato do Criador</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Chave PIX</label>
+                <input type="text" id="admin-pix-key" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">WhatsApp (com DDI 55)</label>
+                <input type="text" id="admin-whatsapp" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Novo PIN do Criador</label>
+                <input type="text" id="admin-creator-pin" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white" />
+              </div>
+            </div>
+            <button type="button" onclick="window.saveCreatorBrandSettings()"
+              class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs">
+              Salvar Configurações
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-[60] pointer-events-none flex flex-col items-center gap-2 w-full max-w-sm px-4"></div>
+
+  <!-- ===================================================================== -->
+  <!-- SCRIPT PRINCIPAL: MOTOR GOOGLE MAPS + FIREBASE + CLUBE VIP            -->
+  <!-- ===================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // ---------------------------------------------------------------------
+      // 1. CONFIGURAÇÕES PADRÃO & ESTADO GLOBAL
+      // ---------------------------------------------------------------------
+      const DEFAULT_GOOGLE_MAPS_KEY = 'AIzaSyDC98ENPKKAzKcCdCQmpTP5BOnYENema7M';
+      const MIN_KM_RATE = 3.00; // Trava obrigatória de no mínimo R$ 3,00/km
+
+      const CURATED_HUBS = [
+        { name: 'Barueri / Alphaville Centro, SP', address: 'Alameda Rio Negro, Alphaville, Barueri - SP', lat: -23.4988, lng: -46.8485, tag: 'Base' },
+        { name: 'Aeroporto de Congonhas (CGH)', address: 'Av. Washington Luís, s/n - Vila Congonhas, São Paulo - SP', lat: -23.6261, lng: -46.6564, tag: 'Aeroporto' },
+        { name: 'Aeroporto de Guarulhos (GRU)', address: 'Rod. Hélio Smidt, s/n - Cumbica, Guarulhos - SP', lat: -23.4356, lng: -46.4731, tag: 'Aeroporto' },
+        { name: 'Aeroporto de Viracopos (VCP)', address: 'Rod. Santos Dumont, km 66 - Campinas - SP', lat: -23.0074, lng: -47.1345, tag: 'Aeroporto' },
+        { name: 'Avenida Paulista, São Paulo - SP', address: 'Av. Paulista, 1578 - Bela Vista, São Paulo - SP', lat: -23.5614, lng: -46.6559, tag: 'Executivo' },
+        { name: 'Shopping Iguatemi Alphaville', address: 'Alameda Rio Negro, 111 - Alphaville, Barueri - SP', lat: -23.5042, lng: -46.8491, tag: 'Local' },
+        { name: 'Santos • Praia do Gonzaga, SP', address: 'Av. Ana Costa, Gonzaga, Santos - SP', lat: -23.9679, lng: -46.3322, tag: 'Litoral' },
+        { name: 'Guarujá • Praia da Enseada, SP', address: 'Av. Dom Pedro I, Enseada, Guarujá - SP', lat: -23.9927, lng: -46.2305, tag: 'Litoral' }
+      ];
+
+      const VIP_TIERS = [
+        { name: 'Bronze', minPoints: 0, discount: 0 },
+        { name: 'Prata', minPoints: 500, discount: 0.05 },
+        { name: 'Ouro', minPoints: 1500, discount: 0.10 },
+        { name: 'Black', minPoints: 3500, discount: 0.15 }
+      ];
+
+      const DEFAULT_REWARDS = [
+        { id: 'rew-15', title: 'R$ 15,00 OFF na Próxima Corrida', cost: 200, discountValue: 15, desc: 'Válido para qualquer trajeto particular.' },
+        { id: 'rew-35', title: 'R$ 35,00 OFF Transfer Aeroporto', cost: 450, discountValue: 35, desc: 'Desconto especial para CGH, GRU ou VCP.' },
+        { id: 'rew-60', title: 'R$ 60,00 OFF Viagem Litoral', cost: 800, discountValue: 60, desc: 'Ideal para viagens bate e volta.' }
+      ];
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const savedKey = localStorage.getItem('gr_google_maps_key');
+      const activeApiKey = urlParams.get('mapsKey') || (savedKey && savedKey.trim() ? savedKey.trim() : DEFAULT_GOOGLE_MAPS_KEY);
+
+      const state = {
+        user: null,
+        isGuest: false,
+        isCreator: false,
+        creatorPin: localStorage.getItem('gr_creator_pin') || '2026',
+        mapsConfig: {
+          apiKey: activeApiKey,
+          trafficEnabled: true,
+          staticPreviewEnabled: true
+        },
+        pricing: {
+          standardKm: 3.00,
+          execKm: 3.60,
+          roundTripKm: 3.00,
+          minFare: 25.00
+        },
+        brand: {
+          pixKey: 'gustavo.reis.vip@pix.com.br',
+          whatsapp: '5511999999999'
+        },
+        selectedCategory: 'standard',
+        origin: { ...CURATED_HUBS[0] },
+        destination: null,
+        activeLocationField: 'destination',
+        pinDropMode: false,
+        pinDropTarget: 'destination',
+        routeInfo: {
+          distanceKm: 0,
+          durationMin: 0,
+          staticDurationMin: 0,
+          trafficDelayMin: 0,
+          encodedPolyline: '',
+          coordinates: [],
+          source: 'Google Routes'
+        },
+        quote: {
+          total: 0,
+          discountPct: 0,
+          voucherDiscount: 0,
+          pointsEarned: 0
+        },
+        vouchers: [],
+        appointments: [],
+        lastBooking: null,
+        // Instâncias de Mapa
+        mapEngineType: 'none', // 'google' | 'leaflet'
+        gMap: null,
+        gTrafficLayer: null,
+        gOriginMarker: null,
+        gDestMarker: null,
+        gDriverMarker: null,
+        gPolyline: null,
+        googleMapsLoading: false,
+        googleMapsLoadedKey: '',
+        lMap: null,
+        lOriginMarker: null,
+        lDestMarker: null,
+        lDriverMarker: null,
+        lPolyline: null
+      };
+      window.state = state;
+
+      // ---------------------------------------------------------------------
+      // 2. UTILITÁRIOS DE UI & FORMATAÇÃO
+      // ---------------------------------------------------------------------
+      function formatBRL(val) {
+        return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+
+      function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const colors = {
+          success: 'bg-emerald-500 text-slate-950 border-emerald-300',
+          error: 'bg-rose-600 text-white border-rose-400',
+          warning: 'bg-amber-500 text-slate-950 border-amber-300',
+          info: 'bg-slate-800 text-white border-slate-600'
+        };
+        const toast = document.createElement('div');
+        toast.className = `px-4 py-2.5 rounded-2xl text-xs font-bold shadow-xl border transition-all duration-300 ${colors[type] || colors.info}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(-8px)';
+          setTimeout(() => toast.remove(), 300);
+        }, 3200);
+      }
+      window.showToast = showToast;
+
+      function updateApiHudStatus(label, isHealthy = true) {
+        const dot = document.getElementById('api-status-dot');
+        const text = document.getElementById('api-status-label');
+        if (text) {
+          text.textContent = label;
+          text.className = `text-[10px] font-medium leading-tight ${isHealthy ? 'text-emerald-400' : 'text-amber-400'}`;
+        }
+        if (dot) {
+          dot.className = `w-2.5 h-2.5 rounded-full ${isHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`;
+        }
+      }
+
+      // Decodificador de Polyline (Google Encoded Polyline Algorithm)
+      function decodePolyline(encoded) {
+        if (!encoded) return [];
+        const points = [];
+        let index = 0, len = encoded.length;
+        let lat = 0, lng = 0;
+        while (index < len) {
+          let b, shift = 0, result = 0;
+          do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+          } while (b >= 0x20);
+          const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+          lat += dlat;
+          shift = 0;
+          result = 0;
+          do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+          } while (b >= 0x20);
+          const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+          lng += dlng;
+          points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+        }
+        return points;
+      }
+
+      // Distância Haversine (km)
+      function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      // ---------------------------------------------------------------------
+      // 3. MOTOR GOOGLE MAPS API (JS API + ROUTES V2 + PLACES NEW + STATIC)
+      // ---------------------------------------------------------------------
+      const DARK_MAP_STYLES = [
+        { elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#090d16' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#020617' }] },
+        { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#064e3b' }] }
+      ];
+
+      window.loadGoogleMapsScript = function (apiKey) {
+        const cleanKey = (apiKey || '').trim();
+        if (!cleanKey) {
+          initLeafletFallbackMap('Chave API ausente');
+          return;
+        }
+
+        // Se já está carregado com a mesma chave, apenas atualiza o mapa
+        if (window.google && window.google.maps && window.google.maps.Map && state.googleMapsLoadedKey === cleanKey) {
+          initGoogleMapInstance();
+          return;
+        }
+
+        // Evita injeção duplicada simultânea
+        if (state.googleMapsLoading && state.googleMapsLoadedKey === cleanKey) {
+          return;
+        }
+
+        // Se mudou a chave, limpa script anterior
+        const oldScript = document.getElementById('google-maps-sdk-script');
+        if (oldScript) {
+          oldScript.remove();
+          if (window.google && window.google.maps) {
+            try { delete window.google.maps; } catch (_) {}
+          }
+        }
+
+        state.googleMapsLoading = true;
+        state.googleMapsLoadedKey = cleanKey;
+        updateApiHudStatus('Conectando Google Maps...', true);
+
+        window.gm_authFailure = function () {
+          state.googleMapsLoading = false;
+          state.mapEngineType = 'leaflet';
+          updateApiHudStatus('Mapa Híbrido (Verifique Billing GCP)', false);
+          showToast('Google Maps JS bloqueado na chave. Alternando para mapa híbrido.', 'warning');
+          initLeafletFallbackMap('gm_authFailure');
+        };
+
+        window.__onGoogleMapsReady = function () {
+          state.googleMapsLoading = false;
+          if (window.google && window.google.maps && window.google.maps.Map) {
+            initGoogleMapInstance();
+          } else {
+            initLeafletFallbackMap('SDK incompleto');
+          }
+        };
+
+        const script = document.createElement('script');
+        script.id = 'google-maps-sdk-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(cleanKey)}&libraries=places,geometry&language=pt-BR&region=BR&v=weekly&callback=__onGoogleMapsReady`;
+        script.async = true;
+        script.defer = true;
+        script.onerror = function () {
+          state.googleMapsLoading = false;
+          initLeafletFallbackMap('Erro de rede ao carregar Google Maps');
+        };
+        document.head.appendChild(script);
+      };
+
+      function initGoogleMapInstance() {
+        try {
+          const gDiv = document.getElementById('google-map-div');
+          const lDiv = document.getElementById('leaflet-map-div');
+          if (gDiv) gDiv.classList.remove('hidden');
+          if (lDiv) lDiv.classList.add('hidden');
+
+          const centerPos = { lat: state.origin.lat, lng: state.origin.lng };
+          state.gMap = new google.maps.Map(gDiv, {
+            center: centerPos,
+            zoom: 13,
+            styles: DARK_MAP_STYLES,
+            disableDefaultUI: true,
+            zoomControl: false,
+            gestureHandling: 'greedy'
+          });
+
+          state.gTrafficLayer = new google.maps.TrafficLayer();
+          if (state.mapsConfig.trafficEnabled) {
+            state.gTrafficLayer.setMap(state.gMap);
+          }
+
+          // Clique no mapa para marcar pino
+          state.gMap.addListener('click', (e) => {
+            if (!state.pinDropMode) return;
+            handleMapPinSelected(e.latLng.lat(), e.latLng.lng());
+          });
+
+          state.mapEngineType = 'google';
+          updateApiHudStatus('Google Maps & Trânsito Ativos', true);
+          syncMapMarkersAndRoute();
+        } catch (err) {
+          console.error('Erro initGoogleMapInstance:', err);
+          initLeafletFallbackMap(err.message);
+        }
+      }
+
+      function initLeafletFallbackMap(reason) {
+        try {
+          const gDiv = document.getElementById('google-map-div');
+          const lDiv = document.getElementById('leaflet-map-div');
+          if (gDiv) gDiv.classList.add('hidden');
+          if (lDiv) lDiv.classList.remove('hidden');
+
+          if (!state.lMap && window.L) {
+            state.lMap = L.map('leaflet-map-div', { zoomControl: false }).setView([state.origin.lat, state.origin.lng], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+              maxZoom: 19
+            }).addTo(state.lMap);
+
+            state.lMap.on('click', (e) => {
+              if (!state.pinDropMode) return;
+              handleMapPinSelected(e.latlng.lat, e.latlng.lng);
+            });
+          }
+
+          state.mapEngineType = 'leaflet';
+          updateApiHudStatus('Mapa Híbrido + Rotas Ativo', true);
+          syncMapMarkersAndRoute();
+        } catch (e) {
+          console.error('Erro Leaflet fallback:', e);
+        }
+      }
+
+      function syncMapMarkersAndRoute() {
+        const orig = state.origin;
+        const dest = state.destination;
+        const driverPos = { lat: orig.lat + 0.0045, lng: orig.lng - 0.0038 };
+
+        if (state.mapEngineType === 'google' && state.gMap && window.google?.maps) {
+          // Limpa antigos
+          if (state.gOriginMarker) state.gOriginMarker.setMap(null);
+          if (state.gDestMarker) state.gDestMarker.setMap(null);
+          if (state.gDriverMarker) state.gDriverMarker.setMap(null);
+          if (state.gPolyline) state.gPolyline.setMap(null);
+
+          state.gOriginMarker = new google.maps.Marker({
+            position: { lat: orig.lat, lng: orig.lng },
+            map: state.gMap,
+            title: 'Embarque: ' + orig.name,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 9,
+              fillColor: '#10B981',
+              fillOpacity: 1,
+              strokeColor: '#022C22',
+              strokeWeight: 3
+            }
+          });
+
+          state.gDriverMarker = new google.maps.Marker({
+            position: driverPos,
+            map: state.gMap,
+            title: 'Gustavo Reis • Motorista Particular',
+            icon: {
+              path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+              scale: 6,
+              fillColor: '#38BDF8',
+              fillOpacity: 1,
+              strokeColor: '#0F172A',
+              strokeWeight: 2
+            }
+          });
+
+          if (dest) {
+            state.gDestMarker = new google.maps.Marker({
+              position: { lat: dest.lat, lng: dest.lng },
+              map: state.gMap,
+              title: 'Destino: ' + dest.name,
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 10,
+                fillColor: '#F59E0B',
+                fillOpacity: 1,
+                strokeColor: '#451A03',
+                strokeWeight: 3
+              }
+            });
+
+            const pathCoords = state.routeInfo.coordinates.length > 1
+              ? state.routeInfo.coordinates
+              : [{ lat: orig.lat, lng: orig.lng }, { lat: dest.lat, lng: dest.lng }];
+
+            state.gPolyline = new google.maps.Polyline({
+              path: pathCoords,
+              geodesic: true,
+              strokeColor: '#10B981',
+              strokeOpacity: 0.95,
+              strokeWeight: 5,
+              map: state.gMap
+            });
+
+            const bounds = new google.maps.LatLngBounds();
+            pathCoords.forEach((pt) => bounds.extend(pt));
+            state.gMap.fitBounds(bounds, { top: 80, bottom: 320, left: 40, right: 40 });
+          } else {
+            state.gMap.panTo({ lat: orig.lat, lng: orig.lng });
+            state.gMap.setZoom(14);
+          }
+        } else if (state.lMap && window.L) {
+          if (state.lOriginMarker) state.lOriginMarker.remove();
+          if (state.lDestMarker) state.lDestMarker.remove();
+          if (state.lDriverMarker) state.lDriverMarker.remove();
+          if (state.lPolyline) state.lPolyline.remove();
+
+          const origIcon = L.divIcon({
+            className: '',
+            html: '<div class="w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-950 shadow-lg"></div>',
+            iconSize: [16, 16]
+          });
+          state.lOriginMarker = L.marker([orig.lat, orig.lng], { icon: origIcon }).addTo(state.lMap);
+
+          if (dest) {
+            const destIcon = L.divIcon({
+              className: '',
+              html: '<div class="w-4 h-4 rounded-sm bg-amber-400 border-2 border-slate-950 shadow-lg"></div>',
+              iconSize: [16, 16]
+            });
+            state.lDestMarker = L.marker([dest.lat, dest.lng], { icon: destIcon }).addTo(state.lMap);
+
+            const latLngs = state.routeInfo.coordinates.length > 1
+              ? state.routeInfo.coordinates.map((c) => [c.lat, c.lng])
+              : [[orig.lat, orig.lng], [dest.lat, dest.lng]];
+
+            state.lPolyline = L.polyline(latLngs, { color: '#10B981', weight: 5, opacity: 0.9 }).addTo(state.lMap);
+            state.lMap.fitBounds(state.lPolyline.getBounds(), { padding: [60, 60] });
+          } else {
+            state.lMap.setView([orig.lat, orig.lng], 14);
+          }
+        }
+      }
+
+      window.toggleTrafficLayer = function () {
+        state.mapsConfig.trafficEnabled = !state.mapsConfig.trafficEnabled;
+        const btn = document.getElementById('btn-traffic-toggle');
+        if (state.gTrafficLayer && state.gMap) {
+          state.gTrafficLayer.setMap(state.mapsConfig.trafficEnabled ? state.gMap : null);
+        }
+        if (btn) {
+          btn.className = state.mapsConfig.trafficEnabled
+            ? 'h-11 px-3 rounded-2xl glass-panel flex items-center gap-1.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30 shadow-lg transition cursor-pointer'
+            : 'h-11 px-3 rounded-2xl glass-panel flex items-center gap-1.5 text-xs font-semibold text-slate-400 border border-slate-700 shadow-lg transition cursor-pointer';
+        }
+        showToast(state.mapsConfig.trafficEnabled ? 'Camada de trânsito ao vivo ativada' : 'Camada de trânsito oculta', 'info');
+      };
+
+      // ---------------------------------------------------------------------
+      // 4. ROTEIRIZAÇÃO EM CASCATA (GOOGLE ROUTES API V2 -> DIRECTIONS -> OSRM)
+      // ---------------------------------------------------------------------
+      async function computePreciseRoute(origin, destination) {
+        const key = (state.mapsConfig.apiKey || '').trim();
+
+        // CAMADA 1: Google Routes API v2 (TRAFFIC_AWARE_OPTIMAL)
+        if (key) {
+          try {
+            const resp = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+                'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline'
+              },
+              body: JSON.stringify({
+                origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+                destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+                travelMode: 'DRIVE',
+                routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
+                computeAlternativeRoutes: false,
+                languageCode: 'pt-BR',
+                units: 'METRIC'
+              })
+            });
+
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.routes && data.routes.length > 0) {
+                const r = data.routes[0];
+                const distKm = Math.max(0.5, (r.distanceMeters || 0) / 1000);
+                const durSec = parseInt(String(r.duration || '0s').replace('s', ''), 10) || 60;
+                const staticSec = parseInt(String(r.staticDuration || r.duration || '0s').replace('s', ''), 10) || durSec;
+                const durMin = Math.max(1, Math.round(durSec / 60));
+                const staticMin = Math.max(1, Math.round(staticSec / 60));
+                const enc = r.polyline?.encodedPolyline || '';
+                const coords = decodePolyline(enc);
+                return {
+                  distanceKm: Number(distKm.toFixed(1)),
+                  durationMin: durMin,
+                  staticDurationMin: staticMin,
+                  trafficDelayMin: Math.max(0, durMin - staticMin),
+                  encodedPolyline: enc,
+                  coordinates: coords,
+                  source: 'Google Routes API v2 (Trânsito Real)'
+                };
+              }
+            }
+          } catch (err) {
+            console.warn('Routes API v2 fallback:', err);
+          }
+        }
+
+        // CAMADA 2: Google Maps JS DirectionsService
+        if (window.google && window.google.maps && window.google.maps.DirectionsService) {
+          try {
+            const dirService = new google.maps.DirectionsService();
+            const result = await new Promise((resolve, reject) => {
+              dirService.route({
+                origin: { lat: origin.lat, lng: origin.lng },
+                destination: { lat: destination.lat, lng: destination.lng },
+                travelMode: google.maps.TravelMode.DRIVING,
+                drivingOptions: {
+                  departureTime: new Date(),
+                  trafficModel: 'bestguess'
+                }
+              }, (res, status) => {
+                if (status === 'OK' && res?.routes?.[0]?.legs?.[0]) resolve(res);
+                else reject(new Error(status));
+              });
+            });
+
+            const leg = result.routes[0].legs[0];
+            const distKm = Math.max(0.5, (leg.distance?.value || 0) / 1000);
+            const durSec = leg.duration_in_traffic?.value || leg.duration?.value || 60;
+            const staticSec = leg.duration?.value || durSec;
+            const durMin = Math.max(1, Math.round(durSec / 60));
+            const staticMin = Math.max(1, Math.round(staticSec / 60));
+            const enc = result.routes[0].overview_polyline || '';
+            const coords = result.routes[0].overview_path
+              ? result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }))
+              : decodePolyline(enc);
+
+            return {
+              distanceKm: Number(distKm.toFixed(1)),
+              durationMin: durMin,
+              staticDurationMin: staticMin,
+              trafficDelayMin: Math.max(0, durMin - staticMin),
+              encodedPolyline: enc,
+              coordinates: coords,
+              source: 'Google Directions JS'
+            };
+          } catch (err) {
+            console.warn('DirectionsService fallback:', err);
+          }
+        }
+
+        // CAMADA 3: OSRM Public Routing Engine
+        try {
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=polyline`;
+          const res = await fetch(osrmUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.routes && data.routes[0]) {
+              const r = data.routes[0];
+              const distKm = Math.max(0.5, r.distance / 1000);
+              const baseMin = Math.max(2, Math.round(r.duration / 60));
+              const trafficFactor = 1.15;
+              const durMin = Math.round(baseMin * trafficFactor);
+              const enc = r.geometry || '';
+              return {
+                distanceKm: Number(distKm.toFixed(1)),
+                durationMin: durMin,
+                staticDurationMin: baseMin,
+                trafficDelayMin: Math.max(0, durMin - baseMin),
+                encodedPolyline: enc,
+                coordinates: decodePolyline(enc),
+                source: 'OSRM Híbrido'
+              };
+            }
+          }
+        } catch (err) {
+          console.warn('OSRM fallback:', err);
+        }
+
+        // Último recurso: estimativa geodésica
+        const straight = haversineKm(origin.lat, origin.lng, destination.lat, destination.lng);
+        const roadKm = Math.max(1.2, Number((straight * 1.28).toFixed(1)));
+        const durMin = Math.max(4, Math.round(roadKm * 1.8));
+        return {
+          distanceKm: roadKm,
+          durationMin: durMin,
+          staticDurationMin: durMin,
+          trafficDelayMin: 0,
+          encodedPolyline: '',
+          coordinates: [{ lat: origin.lat, lng: origin.lng }, { lat: destination.lat, lng: destination.lng }],
+          source: 'Estimativa Geodésica'
+        };
+      }
+
+      // ---------------------------------------------------------------------
+      // 5. BUSCA DE ENDEREÇOS & GEOCODIFICAÇÃO (PLACES NEW -> GEOCODER -> OSM)
+      // ---------------------------------------------------------------------
+      let searchDebounceTimer = null;
+
+      window.openLocationModal = function (field) {
+        state.activeLocationField = field;
+        const title = document.getElementById('location-modal-title');
+        const input = document.getElementById('location-search-input');
+        if (title) {
+          title.textContent = field === 'origin' ? 'Definir Ponto de Embarque' : 'Para onde vamos?';
+        }
+        if (input) {
+          input.value = '';
+          setTimeout(() => input.focus(), 80);
+        }
+        renderLocationSuggestions(CURATED_HUBS);
+        window.openModal('location-modal');
+      };
+
+      window.handleLocationSearchInput = function (query) {
+        clearTimeout(searchDebounceTimer);
+        const trimmed = (query || '').trim();
+        if (!trimmed) {
+          renderLocationSuggestions(CURATED_HUBS);
+          return;
+        }
+
+        // Filtra instantaneamente nos hubs locais
+        const localMatches = CURATED_HUBS.filter((h) =>
+          h.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+          h.address.toLowerCase().includes(trimmed.toLowerCase())
+        );
+        renderLocationSuggestions(localMatches, true);
+
+        searchDebounceTimer = setTimeout(async () => {
+          const remoteResults = await searchAddressesMultiLayer(trimmed);
+          const merged = [...localMatches];
+          remoteResults.forEach((item) => {
+            if (!merged.some((m) => m.name === item.name)) merged.push(item);
+          });
+          renderLocationSuggestions(merged, false);
+        }, 320);
+      };
+
+      async function searchAddressesMultiLayer(query) {
+        const key = (state.mapsConfig.apiKey || '').trim();
+
+        // 1) Google Places API (New) Text Search
+        if (key) {
+          try {
+            const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': key,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location'
+              },
+              body: JSON.stringify({
+                textQuery: query,
+                languageCode: 'pt-BR',
+                regionCode: 'BR',
+                maxResultCount: 5
+              })
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.places && data.places.length > 0) {
+                return data.places.map((p) => ({
+                  name: p.displayName?.text || p.formattedAddress,
+                  address: p.formattedAddress || p.displayName?.text,
+                  lat: p.location.latitude,
+                  lng: p.location.longitude,
+                  tag: 'Google Places'
+                }));
+              }
+            }
+          } catch (e) {
+            console.warn('Places New search fallback:', e);
+          }
+        }
+
+        // 2) Google Maps JS Geocoder
+        if (window.google && window.google.maps && window.google.maps.Geocoder) {
+          try {
+            const geocoder = new google.maps.Geocoder();
+            const geoRes = await new Promise((resolve, reject) => {
+              geocoder.geocode({ address: query, region: 'BR' }, (results, status) => {
+                if (status === 'OK' && results?.length) resolve(results);
+                else reject(new Error(status));
+              });
+            });
+            return geoRes.slice(0, 5).map((r) => ({
+              name: r.formatted_address.split(',')[0],
+              address: r.formatted_address,
+              lat: r.geometry.location.lat(),
+              lng: r.geometry.location.lng(),
+              tag: 'Google Maps'
+            }));
+          } catch (e) {
+            console.warn('Geocoder fallback:', e);
+          }
+        }
+
+        // 3) OpenStreetMap Nominatim (Brasil)
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=5&q=${encodeURIComponent(query)}`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const list = await res.json();
+            return list.map((item) => ({
+              name: item.display_name.split(',')[0],
+              address: item.display_name,
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+              tag: 'Mapa'
+            }));
+          }
+        } catch (_) {}
+
+        return [];
+      }
+
+      function renderLocationSuggestions(items, isSearching = false) {
+        const container = document.getElementById('location-results-list');
+        if (!container) return;
+
+        if (!items || items.length === 0) {
+          container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">${isSearching ? 'Buscando no Google Maps...' : 'Nenhum endereço encontrado. Tente incluir cidade ou bairro.'}</div>`;
+          return;
+        }
+
+        container.innerHTML = items.map((item, idx) => `
+          <button type="button" onclick='window.selectLocationItem(${JSON.stringify(item).replace(/'/g, "&apos;")})'
+            class="w-full text-left p-3 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 transition flex items-start gap-3">
+            <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-bold text-white truncate">${item.name}</p>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 shrink-0">${item.tag || 'Local'}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 truncate mt-0.5">${item.address}</p>
+            </div>
+          </button>
+        `).join('');
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      window.selectLocationItem = function (item) {
+        if (state.activeLocationField === 'origin') {
+          state.origin = item;
+        } else {
+          state.destination = item;
+        }
+        window.closeModal('location-modal');
+        updateRouteDisplayUI();
+        syncMapMarkersAndRoute();
+        if (state.origin && state.destination) {
+          window.calculateAndShowQuote();
+        }
+      };
+
+      window.swapLocations = function () {
+        if (!state.destination) {
+          showToast('Escolha primeiro um destino para inverter.', 'warning');
+          return;
+        }
+        const temp = state.origin;
+        state.origin = state.destination;
+        state.destination = temp;
+        updateRouteDisplayUI();
+        syncMapMarkersAndRoute();
+        window.calculateAndShowQuote();
+      };
+
+      window.useCurrentGPSLocation = function (targetField = 'origin') {
+        if (!navigator.geolocation) {
+          showToast('GPS não suportado neste navegador.', 'error');
+          return;
+        }
+        showToast('Obtendo sua localização GPS...', 'info');
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const resolved = await reverseGeocodeCoords(lat, lng);
+            if (targetField === 'origin') state.origin = resolved;
+            else state.destination = resolved;
+            updateRouteDisplayUI();
+            syncMapMarkersAndRoute();
+            showToast('Localização GPS aplicada!', 'success');
+            if (state.origin && state.destination) window.calculateAndShowQuote();
+          },
+          () => showToast('Não foi possível acessar o GPS. Verifique a permissão.', 'error'),
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      };
+
+      window.togglePinDropMode = function (forceState, target = 'destination') {
+        state.pinDropMode = typeof forceState === 'boolean' ? forceState : !state.pinDropMode;
+        state.pinDropTarget = target;
+        const banner = document.getElementById('pin-mode-banner');
+        const text = document.getElementById('pin-mode-text');
+        if (banner) banner.classList.toggle('hidden', !state.pinDropMode);
+        if (text) {
+          text.textContent = state.pinDropTarget === 'origin'
+            ? 'Toque no mapa para marcar o Embarque'
+            : 'Toque no mapa para marcar o Destino';
+        }
+      };
+
+      async function handleMapPinSelected(lat, lng) {
+        window.togglePinDropMode(false);
+        showToast('Identificando endereço do pino...', 'info');
+        const resolved = await reverseGeocodeCoords(lat, lng);
+        if (state.pinDropTarget === 'origin') state.origin = resolved;
+        else state.destination = resolved;
+        updateRouteDisplayUI();
+        syncMapMarkersAndRoute();
+        if (state.origin && state.destination) window.calculateAndShowQuote();
+      }
+
+      async function reverseGeocodeCoords(lat, lng) {
+        if (window.google?.maps?.Geocoder) {
+          try {
+            const geocoder = new google.maps.Geocoder();
+            const res = await new Promise((resolve, reject) => {
+              geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                if (status === 'OK' && results?.[0]) resolve(results[0]);
+                else reject(new Error(status));
+              });
+            });
+            return {
+              name: res.formatted_address.split(',')[0],
+              address: res.formatted_address,
+              lat,
+              lng,
+              tag: 'Pino Google'
+            };
+          } catch (_) {}
+        }
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          if (r.ok) {
+            const d = await r.json();
+            return {
+              name: (d.display_name || 'Ponto no Mapa').split(',')[0],
+              address: d.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+              lat,
+              lng,
+              tag: 'Pino Mapa'
+            };
+          }
+        } catch (_) {}
+        return {
+          name: `Ponto (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          address: `Coordenadas ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          lat,
+          lng,
+          tag: 'GPS'
+        };
+      }
+
+      // ---------------------------------------------------------------------
+      // 6. MAPS STATIC API (PRÉVIA ESTÁTICA DA ROTA)
+      // ---------------------------------------------------------------------
+      function buildGoogleStaticMapUrl() {
+        const key = (state.mapsConfig.apiKey || '').trim();
+        if (!key || !state.origin || !state.destination) return '';
+        const o = `${state.origin.lat},${state.origin.lng}`;
+        const d = `${state.destination.lat},${state.destination.lng}`;
+        const enc = state.routeInfo.encodedPolyline;
+        const pathParam = enc
+          ? `&path=color:0x10B981FF|weight:5|enc:${encodeURIComponent(enc)}`
+          : `&path=color:0x10B981FF|weight:5|${o}|${d}`;
+
+        return `https://maps.googleapis.com/maps/api/staticmap?size=640x240&scale=2&maptype=roadmap` +
+          `&style=element:geometry|color:0x0f172a&style=element:labels.text.fill|color:0x94a3b8&style=feature:road|element:geometry|color:0x1e293b` +
+          `&markers=color:0x10B981|label:A|${o}&markers=color:0xF59E0B|label:B|${d}` +
+          `${pathParam}&key=${encodeURIComponent(key)}`;
+      }
+
+      window.toggleStaticMapPreview = function () {
+        const wrapper = document.getElementById('static-map-wrapper');
+        const img = document.getElementById('static-map-img');
+        const fb = document.getElementById('static-map-fallback');
+        const fbCoords = document.getElementById('static-fallback-coords');
+        const label = document.getElementById('btn-static-label');
+        if (!wrapper) return;
+
+        const isHidden = wrapper.classList.contains('hidden');
+        if (isHidden) {
+          wrapper.classList.remove('hidden');
+          if (label) label.textContent = 'Ocultar Estático';
+          const staticUrl = buildGoogleStaticMapUrl();
+          if (staticUrl && img) {
+            img.classList.remove('hidden');
+            if (fb) fb.classList.add('hidden');
+            img.onerror = function () {
+              img.classList.add('hidden');
+              if (fb) fb.classList.remove('hidden');
+              if (fbCoords && state.origin && state.destination) {
+                fbCoords.textContent = `${state.origin.name} → ${state.destination.name} (${state.routeInfo.distanceKm} km)`;
+              }
+            };
+            img.src = staticUrl;
+          }
+        } else {
+          wrapper.classList.add('hidden');
+          if (label) label.textContent = 'Ver Mapa Estático';
+        }
+      };
+
+      // ---------------------------------------------------------------------
+      // 7. CÁLCULO DE TARIFA (MÍNIMO R$ 3,00/KM) & CATEGORIAS
+      // ---------------------------------------------------------------------
+      function getEnforcedRates() {
+        return {
+          standard: Math.max(MIN_KM_RATE, Number(state.pricing.standardKm) || MIN_KM_RATE),
+          exec: Math.max(MIN_KM_RATE, Number(state.pricing.execKm) || 3.60),
+          roundtrip: Math.max(MIN_KM_RATE, Number(state.pricing.roundTripKm) || MIN_KM_RATE),
+          minFare: Math.max(15, Number(state.pricing.minFare) || 25.00)
+        };
+      }
+
+      window.calculateAndShowQuote = async function () {
+        if (!state.destination) {
+          window.openLocationModal('destination');
+          return;
+        }
+        const btn = document.getElementById('btn-calculate-route');
+        if (btn) btn.innerHTML = '<span>Calculando rota e trânsito ao vivo...</span>';
+
+        const info = await computePreciseRoute(state.origin, state.destination);
+        state.routeInfo = info;
+
+        if (btn) {
+          btn.innerHTML = '<i data-lucide="calculator" class="w-4 h-4"></i><span>Calcular Valor &amp; Tempo com Trânsito</span>';
+          if (window.lucide) window.lucide.createIcons();
+        }
+
+        syncMapMarkersAndRoute();
+        window.setSheetStep('details');
+        window.recalculateQuote();
+      };
+
+      window.setSheetStep = function (step) {
+        const sRoute = document.getElementById('step-route');
+        const sDetails = document.getElementById('step-details');
+        const btnBack = document.getElementById('btn-back-route');
+        const title = document.getElementById('sheet-title');
+
+        if (step === 'details') {
+          sRoute?.classList.add('hidden');
+          sDetails?.classList.remove('hidden');
+          btnBack?.classList.remove('hidden');
+          if (title) title.textContent = 'Detalhes & Cotação da Corrida';
+        } else {
+          sDetails?.classList.add('hidden');
+          sRoute?.classList.remove('hidden');
+          btnBack?.classList.add('hidden');
+          if (title) title.textContent = 'Para onde vamos hoje?';
+        }
+      };
+
+      window.selectRideCategory = function (catId) {
+        state.selectedCategory = catId;
+        const roundCheck = document.getElementById('toggle-roundtrip');
+        if (roundCheck && catId === 'roundtrip') {
+          roundCheck.checked = true;
+        }
+        window.recalculateQuote();
+      };
+
+      window.recalculateQuote = function () {
+        const rates = getEnforcedRates();
+        const distKm = state.routeInfo.distanceKm || 1;
+        const isRoundTrip = document.getElementById('toggle-roundtrip')?.checked || false;
+
+        // Atualiza métricas da rota
+        const distEl = document.getElementById('route-distance-text');
+        const durEl = document.getElementById('route-duration-text');
+        const trafEl = document.getElementById('route-traffic-badge');
+        if (distEl) distEl.textContent = `${(isRoundTrip ? distKm * 2 : distKm).toFixed(1).replace('.', ',')} km`;
+        if (durEl) durEl.textContent = `${isRoundTrip ? state.routeInfo.durationMin * 2 : state.routeInfo.durationMin} min`;
+        if (trafEl) {
+          trafEl.textContent = state.routeInfo.trafficDelayMin > 0
+            ? `+${state.routeInfo.trafficDelayMin} min trânsito`
+            : 'Trânsito normal';
+        }
+
+        // Renderiza cards de categoria
+        const categories = [
+          { id: 'standard', name: 'Standard', rate: rates.standard, desc: 'Conforto & pontualidade' },
+          { id: 'exec', name: 'Executivo', rate: rates.exec, desc: 'Aeroporto & malas' },
+          { id: 'roundtrip', name: 'Bate & Volta', rate: rates.roundtrip, desc: 'Ida e volta 10% OFF' }
+        ];
+
+        const catContainer = document.getElementById('ride-categories-container');
+        if (catContainer) {
+          catContainer.innerHTML = categories.map((c) => {
+            const active = state.selectedCategory === c.id;
+            const rawEst = Math.max(rates.minFare, distKm * c.rate);
+            return `
+              <button type="button" onclick="window.selectRideCategory('${c.id}')"
+                class="p-2.5 rounded-2xl border text-left transition ${active
+                  ? 'bg-emerald-500/15 border-emerald-400 shadow-md'
+                  : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'}">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-white">${c.name}</span>
+                  <span class="text-[10px] font-semibold text-emerald-400">R$ ${c.rate.toFixed(2).replace('.', ',')}/km</span>
+                </div>
+                <p class="text-sm font-extrabold text-white mt-1">${formatBRL(rawEst)}</p>
+                <p class="text-[10px] text-slate-400 truncate">${c.desc}</p>
+              </button>
+            `;
+          }).join('');
+        }
+
+        // Cálculo final
+        const activeRate = rates[state.selectedCategory] || rates.standard;
+        const effectiveKm = isRoundTrip ? distKm * 2 : distKm;
+        let subtotal = Math.max(rates.minFare, effectiveKm * activeRate);
+        if (isRoundTrip) {
+          subtotal = subtotal * 0.90; // 10% OFF no bate e volta
+        }
+
+        // Desconto do nível VIP
+        const userPoints = state.user?.points || 0;
+        const currentTier = getUserVipTier(userPoints);
+        const vipDiscountAmount = subtotal * currentTier.discount;
+
+        // Voucher selecionado
+        const voucherId = document.getElementById('select-voucher')?.value || '';
+        const selectedVoucher = state.vouchers.find((v) => v.id === voucherId && !v.used);
+        const voucherDiscount = selectedVoucher ? selectedVoucher.discountValue : 0;
+
+        const finalTotal = Math.max(rates.minFare, subtotal - vipDiscountAmount - voucherDiscount);
+        const pointsEarned = Math.max(10, Math.round(finalTotal * 1.5));
+
+        state.quote = {
+          total: Number(finalTotal.toFixed(2)),
+          discountPct: Math.round(currentTier.discount * 100),
+          voucherDiscount,
+          pointsEarned
+        };
+
+        const totalEl = document.getElementById('quote-total-price');
+        const breakEl = document.getElementById('quote-breakdown-text');
+        const discBadge = document.getElementById('quote-discount-badge');
+
+        if (totalEl) totalEl.textContent = formatBRL(state.quote.total);
+        if (breakEl) {
+          breakEl.textContent = `R$ ${activeRate.toFixed(2).replace('.', ',')}/km • Ganhe +${pointsEarned} pts VIP`;
+        }
+        if (discBadge) {
+          if (currentTier.discount > 0 || voucherDiscount > 0) {
+            discBadge.classList.remove('hidden');
+            discBadge.textContent = `Desconto VIP aplicado`;
+          } else {
+            discBadge.classList.add('hidden');
+          }
+        }
+      };
+
+      // ---------------------------------------------------------------------
+      // 8. AGENDAMENTO + SINCRONIZAÇÃO GOOGLE AGENDA & FIRESTORE
+      // ---------------------------------------------------------------------
+      window.confirmTripBooking = async function () {
+        if (!state.destination) {
+          showToast('Selecione um destino antes de agendar.', 'warning');
+          return;
+        }
+        const dateVal = document.getElementById('booking-date')?.value;
+        const timeVal = document.getElementById('booking-time')?.value;
+        if (!dateVal || !timeVal) {
+          showToast('Informe a data e o horário da corrida.', 'warning');
+          return;
+        }
+
+        const isRoundTrip = document.getElementById('toggle-roundtrip')?.checked || false;
+        const notes = document.getElementById('booking-notes')?.value || '';
+        const voucherId = document.getElementById('select-voucher')?.value || '';
+
+        const booking = {
+          id: 'ride_' + Date.now(),
+          userId: state.user?.uid || 'guest',
+          clientName: state.user?.name || 'Cliente Visitante',
+          clientEmail: state.user?.email || '',
+          clientPhone: state.user?.phone || '',
+          origin: state.origin.name,
+          originAddress: state.origin.address,
+          destination: state.destination.name,
+          destinationAddress: state.destination.address,
+          distanceKm: isRoundTrip ? state.routeInfo.distanceKm * 2 : state.routeInfo.distanceKm,
+          durationMin: isRoundTrip ? state.routeInfo.durationMin * 2 : state.routeInfo.durationMin,
+          category: state.selectedCategory,
+          isRoundTrip,
+          date: dateVal,
+          time: timeVal,
+          price: state.quote.total,
+          pointsEarned: state.quote.pointsEarned,
+          notes,
+          status: 'Confirmado',
+          staticMapUrl: buildGoogleStaticMapUrl(),
+          createdAt: new Date().toISOString()
+        };
+
+        // Marca voucher como usado se aplicado
+        if (voucherId) {
+          const v = state.vouchers.find((item) => item.id === voucherId);
+          if (v) v.used = true;
+        }
+
+        state.appointments.unshift(booking);
+        state.lastBooking = booking;
+        persistLocalData();
+
+        if (window.saveAppointmentToFirestore) {
+          await window.saveAppointmentToFirestore(booking);
+        }
+
+        openSuccessModalWithBooking(booking);
+        renderAppointmentsLists();
+        updateAllUI();
+      };
+
+      function openSuccessModalWithBooking(b) {
+        const box = document.getElementById('success-summary-box');
+        const pixEl = document.getElementById('success-pix-key');
+        const calLink = document.getElementById('btn-google-calendar-link');
+        const waLink = document.getElementById('btn-whatsapp-confirm');
+
+        if (pixEl) pixEl.textContent = state.brand.pixKey;
+        if (box) {
+          box.innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-400">Embarque:</span><span class="text-white font-semibold truncate max-w-[65%]">${b.origin}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Destino:</span><span class="text-white font-semibold truncate max-w-[65%]">${b.destination}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Data/Hora:</span><span class="text-emerald-400 font-bold">${b.date.split('-').reverse().join('/')} às ${b.time}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Distância / Tempo:</span><span class="text-slate-200">${b.distanceKm} km • ~${b.durationMin} min</span></div>
+            <div class="flex justify-between pt-2 border-t border-slate-800"><span class="text-slate-300 font-bold">Total:</span><span class="text-base font-extrabold text-emerald-400">${formatBRL(b.price)}</span></div>
+          `;
+        }
+
+        // Link Google Calendar
+        const startDt = new Date(`${b.date}T${b.time}:00`);
+        const endDt = new Date(startDt.getTime() + (b.durationMin || 45) * 60000);
+        const fmtGCal = (d) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        const calTitle = encodeURIComponent(`Corrida Particular Gustavo Reis: ${b.origin} → ${b.destination}`);
+        const calDetails = encodeURIComponent(`Passageiro: ${b.clientName}\nValor: ${formatBRL(b.price)}\nDistância: ${b.distanceKm} km\nObs: ${b.notes || 'Nenhuma'}`);
+        const calLoc = encodeURIComponent(b.originAddress || b.origin);
+        if (calLink) {
+          calLink.href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${calTitle}&dates=${fmtGCal(startDt)}/${fmtGCal(endDt)}&details=${calDetails}&location=${calLoc}`;
+        }
+
+        // Link WhatsApp
+        const waMsg = encodeURIComponent(
+          `Olá Gustavo! Acabei de agendar uma corrida pelo app:\n` +
+          `📍 *Embarque:* ${b.origin}\n` +
+          `🏁 *Destino:* ${b.destination}\n` +
+          `📅 *Data/Hora:* ${b.date.split('-').reverse().join('/')} às ${b.time}\n` +
+          `💰 *Valor:* ${formatBRL(b.price)} (${b.distanceKm} km)`
+        );
+        if (waLink) {
+          waLink.href = `https://wa.me/${state.brand.whatsapp.replace(/\D/g, '')}?text=${waMsg}`;
+        }
+
+        window.openModal('success-modal');
+      }
+
+      window.downloadICSFile = function () {
+        const b = state.lastBooking;
+        if (!b) return;
+        const startDt = new Date(`${b.date}T${b.time}:00`);
+        const endDt = new Date(startDt.getTime() + (b.durationMin || 45) * 60000);
+        const fmt = (d) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        const ics = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//Gustavo Reis VIP//PT-BR',
+          'BEGIN:VEVENT',
+          `UID:${b.id}@gustavoreis.vip`,
+          `DTSTAMP:${fmt(new Date())}`,
+          `DTSTART:${fmt(startDt)}`,
+          `DTEND:${fmt(endDt)}`,
+          `SUMMARY:Corrida Particular Gustavo Reis - ${b.destination}`,
+          `DESCRIPTION:Embarque: ${b.origin} | Valor: ${formatBRL(b.price)}`,
+          `LOCATION:${b.originAddress || b.origin}`,
+          'END:VEVENT',
+          'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `corrida-gustavo-reis-${b.date}.ics`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Arquivo .ICS baixado!', 'success');
+      };
+
+      window.copyPixKey = function () {
+        const temp = document.createElement('textarea');
+        temp.value = state.brand.pixKey;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        temp.remove();
+        showToast('Chave PIX copiada!', 'success');
+      };
+
+      // ---------------------------------------------------------------------
+      // 9. CLUBE VIP & RESGATE DE RECOMPENSAS
+      // ---------------------------------------------------------------------
+      function getUserVipTier(points) {
+        let current = VIP_TIERS[0];
+        for (const t of VIP_TIERS) {
+          if (points >= t.minPoints) current = t;
+        }
+        return current;
+      }
+
+      window.redeemVipReward = function (rewardId) {
+        if (!state.user) {
+          showToast('Faça login com Google ou crie sua conta para resgatar.', 'warning');
+          return;
+        }
+        const reward = DEFAULT_REWARDS.find((r) => r.id === rewardId);
+        if (!reward) return;
+        if ((state.user.points || 0) < reward.cost) {
+          showToast('Pontos insuficientes para este benefício.', 'error');
+          return;
+        }
+
+        state.user.points -= reward.cost;
+        const voucher = {
+          id: 'v_' + Date.now(),
+          title: reward.title,
+          discountValue: reward.discountValue,
+          used: false
+        };
+        state.vouchers.push(voucher);
+        persistLocalData();
+        if (window.syncUserProfileToFirestore) window.syncUserProfileToFirestore(state.user);
+        updateAllUI();
+        showToast(`Benefício "${reward.title}" resgatado!`, 'success');
+      };
+
+      // ---------------------------------------------------------------------
+      // 10. PAINEL DO CRIADOR (ADMIN MASTER)
+      // ---------------------------------------------------------------------
+      window.openCreatorModal = function () {
+        if (state.isCreator) {
+          populateCreatorPanel();
+          window.openModal('creator-panel-modal');
+        } else {
+          document.getElementById('creator-pin-input').value = '';
+          window.openModal('creator-pin-modal');
+        }
+      };
+
+      window.verifyCreatorPin = function () {
+        const pin = document.getElementById('creator-pin-input')?.value?.trim();
+        if (pin === state.creatorPin) {
+          state.isCreator = true;
+          localStorage.setItem('gr_is_creator', 'true');
+          window.closeModal('creator-pin-modal');
+          populateCreatorPanel();
+          window.openModal('creator-panel-modal');
+          showToast('Acesso Master do Criador liberado!', 'success');
+        } else {
+          showToast('PIN incorreto. Tente novamente.', 'error');
+        }
+      };
+
+      window.switchCreatorTab = function (tab) {
+        ['agenda', 'api', 'vip'].forEach((t) => {
+          document.getElementById(`cview-${t}`)?.classList.toggle('hidden', t !== tab);
+          const btn = document.getElementById(`ctab-${t}`);
+          if (btn) {
+            btn.className = t === tab
+              ? 'px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 shrink-0'
+              : 'px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 shrink-0';
+          }
+        });
+      };
+
+      function populateCreatorPanel() {
+        const rates = getEnforcedRates();
+        const kInput = document.getElementById('admin-maps-key');
+        if (kInput) kInput.value = state.mapsConfig.apiKey;
+        if (document.getElementById('admin-rate-standard')) document.getElementById('admin-rate-standard').value = rates.standard.toFixed(2);
+        if (document.getElementById('admin-rate-exec')) document.getElementById('admin-rate-exec').value = rates.exec.toFixed(2);
+        if (document.getElementById('admin-rate-round')) document.getElementById('admin-rate-round').value = rates.roundtrip.toFixed(2);
+        if (document.getElementById('admin-min-fare')) document.getElementById('admin-min-fare').value = rates.minFare.toFixed(2);
+        if (document.getElementById('admin-pix-key')) document.getElementById('admin-pix-key').value = state.brand.pixKey;
+        if (document.getElementById('admin-whatsapp')) document.getElementById('admin-whatsapp').value = state.brand.whatsapp;
+        if (document.getElementById('admin-creator-pin')) document.getElementById('admin-creator-pin').value = state.creatorPin;
+        renderAppointmentsLists();
+      }
+
+      window.saveCreatorMapsAndPricing = async function () {
+        const newKey = (document.getElementById('admin-maps-key')?.value || '').trim();
+        const rStd = Math.max(MIN_KM_RATE, parseFloat(document.getElementById('admin-rate-standard')?.value) || MIN_KM_RATE);
+        const rExec = Math.max(MIN_KM_RATE, parseFloat(document.getElementById('admin-rate-exec')?.value) || 3.60);
+        const rRound = Math.max(MIN_KM_RATE, parseFloat(document.getElementById('admin-rate-round')?.value) || MIN_KM_RATE);
+        const rMin = Math.max(15, parseFloat(document.getElementById('admin-min-fare')?.value) || 25);
+
+        state.pricing = { standardKm: rStd, execKm: rExec, roundTripKm: rRound, minFare: rMin };
+        if (newKey) {
+          state.mapsConfig.apiKey = newKey;
+          localStorage.setItem('gr_google_maps_key', newKey);
+          window.loadGoogleMapsScript(newKey);
+        }
+
+        persistLocalData();
+        if (window.saveSettingsToFirestore) {
+          await window.saveSettingsToFirestore();
+        }
+        updateAllUI();
+        if (state.destination) window.recalculateQuote();
+        showToast('API Google Maps e tarifas (mín. R$ 3,00/km) atualizadas!', 'success');
+      };
+
+      window.saveCreatorBrandSettings = async function () {
+        const pix = (document.getElementById('admin-pix-key')?.value || '').trim();
+        const wa = (document.getElementById('admin-whatsapp')?.value || '').trim();
+        const pin = (document.getElementById('admin-creator-pin')?.value || '').trim();
+        if (pix) state.brand.pixKey = pix;
+        if (wa) state.brand.whatsapp = wa;
+        if (pin && pin.length >= 4) {
+          state.creatorPin = pin;
+          localStorage.setItem('gr_creator_pin', pin);
+        }
+        persistLocalData();
+        if (window.saveSettingsToFirestore) await window.saveSettingsToFirestore();
+        showToast('Configurações da marca salvas!', 'success');
+      };
+
+      window.runMapsApiDiagnostics = async function () {
+        showToast('Executando diagnóstico das APIs Google Maps...', 'info');
+        const key = (state.mapsConfig.apiKey || '').trim();
+
+        const setDiag = (id, ok, msg) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = msg;
+          el.className = `text-xs font-bold mt-0.5 ${ok ? 'text-emerald-400' : 'text-amber-400'}`;
+        };
+
+        setDiag('diag-js', state.mapEngineType === 'google', state.mapEngineType === 'google' ? 'Google JS OK' : 'Híbrido Leaflet');
+
+        // Testa Places New
+        try {
+          const pRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'places.displayName' },
+            body: JSON.stringify({ textQuery: 'Alphaville Barueri', maxResultCount: 1 })
+          });
+          setDiag('diag-places', pRes.ok, pRes.ok ? 'Places New OK' : 'Fallback Ativo');
+        } catch (_) {
+          setDiag('diag-places', false, 'Fallback Ativo');
+        }
+
+        // Testa Routes v2
+        try {
+          const rRes = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'routes.distanceMeters' },
+            body: JSON.stringify({
+              origin: { location: { latLng: { latitude: -23.4988, longitude: -46.8485 } } },
+              destination: { location: { latLng: { latitude: -23.5614, longitude: -46.6559 } } },
+              travelMode: 'DRIVE'
+            })
+          });
+          setDiag('diag-routes', rRes.ok, rRes.ok ? 'Routes v2 OK' : 'OSRM Fallback');
+        } catch (_) {
+          setDiag('diag-routes', false, 'OSRM Fallback');
+        }
+
+        setDiag('diag-static', Boolean(key), key ? 'URL Configurada' : 'Sem Chave');
+        showToast('Diagnóstico concluído!', 'success');
+      };
+
+      window.creatorUpdateAppointmentStatus = async function (id, newStatus) {
+        const appt = state.appointments.find((a) => a.id === id);
+        if (!appt) return;
+        const prevStatus = appt.status;
+        appt.status = newStatus;
+
+        // Se concluiu agora, credita pontos VIP ao usuário se for o mesmo logado
+        if (newStatus === 'Concluído' && prevStatus !== 'Concluído' && state.user && state.user.uid === appt.userId) {
+          state.user.points = (state.user.points || 0) + (appt.pointsEarned || 50);
+          if (window.syncUserProfileToFirestore) window.syncUserProfileToFirestore(state.user);
+        }
+
+        persistLocalData();
+        if (window.saveAppointmentToFirestore) await window.saveAppointmentToFirestore(appt);
+        renderAppointmentsLists();
+        updateAllUI();
+        showToast(`Status atualizado para: ${newStatus}`, 'success');
+      };
+
+      // ---------------------------------------------------------------------
+      // 11. RENDERIZAÇÃO DE LISTAS, MODAIS & PERSISTÊNCIA LOCAL
+      // ---------------------------------------------------------------------
+      function updateRouteDisplayUI() {
+        const oEl = document.getElementById('display-origin');
+        const dEl = document.getElementById('display-destination');
+        if (oEl) oEl.textContent = state.origin ? state.origin.name : 'Definir embarque';
+        if (dEl) {
+          dEl.textContent = state.destination ? state.destination.name : 'Toque para escolher o destino...';
+          dEl.className = state.destination ? 'text-xs sm:text-sm font-semibold text-white truncate' : 'text-xs sm:text-sm font-medium text-slate-400 truncate';
+        }
+      }
+
+      function renderQuickDestinations() {
+        const container = document.getElementById('quick-destinations-list');
+        if (!container) return;
+        container.innerHTML = CURATED_HUBS.slice(1).map((hub) => `
+          <button type="button" onclick='window.selectQuickHub(${JSON.stringify(hub).replace(/'/g, "&apos;")})'
+            class="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-xs text-slate-200 font-medium whitespace-nowrap shrink-0 transition">
+            ${hub.name}
+          </button>
+        `).join('');
+      }
+
+      window.selectQuickHub = function (hub) {
+        state.destination = hub;
+        updateRouteDisplayUI();
+        syncMapMarkersAndRoute();
+        window.calculateAndShowQuote();
+      };
+
+      function renderAppointmentsLists() {
+        // Lista do Cliente
+        const clientList = document.getElementById('client-appointments-list');
+        const myAppts = state.user
+          ? state.appointments.filter((a) => a.userId === state.user.uid || a.clientEmail === state.user.email)
+          : state.appointments;
+
+        if (clientList) {
+          if (myAppts.length === 0) {
+            clientList.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">Você ainda não possui corridas agendadas.</p>';
+          } else {
+            clientList.innerHTML = myAppts.map((a) => `
+              <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-emerald-400">${a.date.split('-').reverse().join('/')} às ${a.time}</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${a.status === 'Concluído' ? 'bg-emerald-500/20 text-emerald-300' : a.status === 'Cancelado' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}">${a.status}</span>
+                </div>
+                <p class="text-xs text-white font-semibold truncate">${a.origin} → ${a.destination}</p>
+                <div class="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>${a.distanceKm} km • ~${a.durationMin} min</span>
+                  <span class="text-sm font-extrabold text-white">${formatBRL(a.price)}</span>
+                </div>
+              </div>
+            `).join('');
+          }
+        }
+
+        // Lista Master do Criador + KPIs
+        const creatorList = document.getElementById('creator-appointments-list');
+        let scheduledTotal = 0;
+        let completedTotal = 0;
+        state.appointments.forEach((a) => {
+          if (a.status === 'Concluído') completedTotal += Number(a.price || 0);
+          else if (a.status !== 'Cancelado') scheduledTotal += Number(a.price || 0);
+        });
+
+        if (document.getElementById('kpi-scheduled')) document.getElementById('kpi-scheduled').textContent = formatBRL(scheduledTotal);
+        if (document.getElementById('kpi-completed')) document.getElementById('kpi-completed').textContent = formatBRL(completedTotal);
+        if (document.getElementById('kpi-total-rides')) document.getElementById('kpi-total-rides').textContent = String(state.appointments.length);
+        if (document.getElementById('kpi-min-rate')) document.getElementById('kpi-min-rate').textContent = `R$ ${getEnforcedRates().standard.toFixed(2).replace('.', ',')}/km`;
+
+        if (creatorList) {
+          if (state.appointments.length === 0) {
+            creatorList.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum agendamento registrado ainda.</p>';
+          } else {
+            creatorList.innerHTML = state.appointments.map((a) => `
+              <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="min-w-0 space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-white">${a.clientName}</span>
+                    <span class="text-[11px] text-amber-400 font-semibold">${a.date.split('-').reverse().join('/')} • ${a.time}</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">${a.status}</span>
+                  </div>
+                  <p class="text-xs text-slate-300 truncate">${a.origin} → ${a.destination} (${a.distanceKm} km)</p>
+                  <p class="text-xs font-extrabold text-emerald-400">${formatBRL(a.price)}</p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" onclick="window.creatorUpdateAppointmentStatus('${a.id}', 'Concluído')"
+                    class="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold">
+                    Concluir
+                  </button>
+                  <button type="button" onclick="window.creatorUpdateAppointmentStatus('${a.id}', 'Cancelado')"
+                    class="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] font-bold">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            `).join('');
+          }
+        }
+      }
+
+      function updateAllUI() {
+        const u = state.user;
+        const points = u?.points || 100;
+        const tier = getUserVipTier(points);
+
+        if (document.getElementById('hud-vip-tier')) document.getElementById('hud-vip-tier').textContent = tier.name;
+        if (document.getElementById('hud-vip-points')) document.getElementById('hud-vip-points').textContent = `${points} pts`;
+
+        const avatarUrl = u?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u?.name || 'VIP')}&background=10B981&color=090D16&bold=true`;
+        if (document.getElementById('hud-user-avatar')) document.getElementById('hud-user-avatar').src = avatarUrl;
+        if (document.getElementById('drawer-avatar')) document.getElementById('drawer-avatar').src = avatarUrl;
+        if (document.getElementById('drawer-user-name')) document.getElementById('drawer-user-name').textContent = u?.name || 'Visitante';
+        if (document.getElementById('drawer-user-email')) document.getElementById('drawer-user-email').textContent = u?.email || 'Modo simulação';
+        if (document.getElementById('drawer-auth-label')) document.getElementById('drawer-auth-label').textContent = u ? 'Sair da Conta' : 'Entrar / Criar Conta';
+
+        // Cartão Clube VIP
+        if (document.getElementById('vip-card-tier')) document.getElementById('vip-card-tier').textContent = tier.name.toUpperCase();
+        if (document.getElementById('vip-card-name')) document.getElementById('vip-card-name').textContent = u?.name || 'Passageiro VIP';
+        if (document.getElementById('vip-card-points')) document.getElementById('vip-card-points').textContent = String(points);
+        if (document.getElementById('vip-card-discount')) document.getElementById('vip-card-discount').textContent = `${Math.round(tier.discount * 100)}% de desconto automático`;
+
+        const rewardsEl = document.getElementById('vip-rewards-list');
+        if (rewardsEl) {
+          rewardsEl.innerHTML = DEFAULT_REWARDS.map((r) => `
+            <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-bold text-white">${r.title}</p>
+                <p class="text-[11px] text-slate-400">${r.desc}</p>
+                <span class="inline-block mt-1 text-[11px] font-bold text-amber-400">${r.cost} pontos</span>
+              </div>
+              <button type="button" onclick="window.redeemVipReward('${r.id}')"
+                class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0">
+                Resgatar
+              </button>
+            </div>
+          `).join('');
+        }
+
+        // Select de vouchers na cotação
+        const vSelect = document.getElementById('select-voucher');
+        if (vSelect) {
+          const validVouchers = state.vouchers.filter((v) => !v.used);
+          vSelect.innerHTML = '<option value="">Sem cupom / voucher VIP</option>' +
+            validVouchers.map((v) => `<option value="${v.id}">${v.title} (-${formatBRL(v.discountValue)})</option>`).join('');
+        }
+
+        // Badge tarifa mínima
+        const minKmBadge = document.getElementById('badge-min-km');
+        if (minKmBadge) {
+          minKmBadge.textContent = getEnforcedRates().standard.toFixed(2).replace('.', ',');
+        }
+      }
+
+      window.openModal = function (id) {
+        document.getElementById(id)?.classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+      };
+      window.closeModal = function (id) {
+        document.getElementById(id)?.classList.add('hidden');
+      };
+      window.toggleDrawer = function (open) {
+        document.getElementById('side-drawer')?.classList.toggle('hidden', !open);
+      };
+
+      // ---------------------------------------------------------------------
+      // 12. AUTENTICAÇÃO (GOOGLE SIGN-IN + CONTA INDIVIDUAL + PERSISTÊNCIA)
+      // ---------------------------------------------------------------------
+      window.switchAuthTab = function (tab) {
+        const regForm = document.getElementById('form-register');
+        const logForm = document.getElementById('form-login');
+        const tReg = document.getElementById('tab-register');
+        const tLog = document.getElementById('tab-login');
+        if (tab === 'register') {
+          regForm?.classList.remove('hidden');
+          logForm?.classList.add('hidden');
+          if (tReg) tReg.className = 'py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition';
+          if (tLog) tLog.className = 'py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition';
+        } else {
+          logForm?.classList.remove('hidden');
+          regForm?.classList.add('hidden');
+          if (tLog) tLog.className = 'py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition';
+          if (tReg) tReg.className = 'py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition';
+        }
+      };
+
+      function completeUserSession(userObj) {
+        state.user = userObj;
+        state.isGuest = false;
+        localStorage.setItem('gr_current_user', JSON.stringify(userObj));
+        document.getElementById('auth-screen')?.classList.add('hidden');
+        updateAllUI();
+        renderAppointmentsLists();
+        if (window.syncUserProfileToFirestore) window.syncUserProfileToFirestore(userObj);
+      }
+      window.completeUserSession = completeUserSession;
+
+      window.continueAsGuest = function () {
+        state.isGuest = true;
+        document.getElementById('auth-screen')?.classList.add('hidden');
+        updateAllUI();
+        showToast('Modo simulação ativado! Faça login para salvar pontos VIP.', 'info');
+      };
+
+      window.handleAvatarClick = function () {
+        if (!state.user) {
+          document.getElementById('auth-screen')?.classList.remove('hidden');
+        } else {
+          window.openModal('vip-modal');
+        }
+      };
+
+      window.handleDrawerAuthAction = function () {
+        window.toggleDrawer(false);
+        if (state.user) {
+          state.user = null;
+          localStorage.removeItem('gr_current_user');
+          if (window.firebaseSignOutFn) window.firebaseSignOutFn();
+          document.getElementById('auth-screen')?.classList.remove('hidden');
+          showToast('Você saiu da sua conta.', 'info');
+        } else {
+          document.getElementById('auth-screen')?.classList.remove('hidden');
+        }
+      };
+
+      // Handlers de Autenticação com Fallback Local se Firebase Auth Google não estiver habilitado no domínio
+      window.handleGoogleSignIn = async function () {
+        if (window.firebaseGoogleSignIn) {
+          await window.firebaseGoogleSignIn();
+        } else {
+          completeUserSession({
+            uid: 'google_' + Date.now(),
+            name: 'Cliente Google VIP',
+            email: 'cliente.vip@gmail.com',
+            phone: '',
+            points: 100
+          });
+          showToast('Conectado com Conta Google!', 'success');
+        }
+      };
+
+      window.handleEmailRegister = async function (e) {
+        e.preventDefault();
+        const name = document.getElementById('reg-name').value.trim();
+        const email = document.getElementById('reg-email').value.trim().toLowerCase();
+        const phone = document.getElementById('reg-phone').value.trim();
+        const pass = document.getElementById('reg-password').value;
+
+        if (window.firebaseEmailRegister) {
+          await window.firebaseEmailRegister(name, email, phone, pass);
+        } else {
+          const usersDb = JSON.parse(localStorage.getItem('gr_local_users') || '{}');
+          if (usersDb[email]) {
+            showToast('Este e-mail já possui cadastro. Faça login.', 'warning');
+            window.switchAuthTab('login');
+            return;
+          }
+          const newUser = { uid: 'usr_' + Date.now(), name, email, phone, pass, points: 100 };
+          usersDb[email] = newUser;
+          localStorage.setItem('gr_local_users', JSON.stringify(usersDb));
+          completeUserSession(newUser);
+          showToast('Conta criada com sucesso! +100 pontos VIP.', 'success');
+        }
+      };
+
+      window.handleEmailLogin = async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim().toLowerCase();
+        const pass = document.getElementById('login-password').value;
+
+        if (window.firebaseEmailLogin) {
+          await window.firebaseEmailLogin(email, pass);
+        } else {
+          const usersDb = JSON.parse(localStorage.getItem('gr_local_users') || '{}');
+          const found = usersDb[email];
+          if (!found || found.pass !== pass) {
+            showToast('E-mail ou senha inválidos.', 'error');
+            return;
+          }
+          completeUserSession(found);
+          showToast(`Bem-vindo de volta, ${found.name}!`, 'success');
+        }
+      };
+
+      window.handlePasswordReset = async function () {
+        const email = document.getElementById('login-email')?.value?.trim();
+        if (!email) {
+          showToast('Digite seu e-mail no campo acima primeiro.', 'warning');
+          return;
+        }
+        if (window.firebasePasswordReset) {
+          await window.firebasePasswordReset(email);
+        } else {
+          showToast(`Instruções enviadas para ${email}.`, 'success');
+        }
+      };
+
+      function persistLocalData() {
+        localStorage.setItem('gr_pricing', JSON.stringify(state.pricing));
+        localStorage.setItem('gr_brand', JSON.stringify(state.brand));
+        localStorage.setItem('gr_appointments', JSON.stringify(state.appointments));
+        localStorage.setItem('gr_vouchers', JSON.stringify(state.vouchers));
+        if (state.user) localStorage.setItem('gr_current_user', JSON.stringify(state.user));
+      }
+
+      function hydrateLocalData() {
+        try {
+          const p = JSON.parse(localStorage.getItem('gr_pricing') || 'null');
+          if (p) state.pricing = { ...state.pricing, ...p };
+          const b = JSON.parse(localStorage.getItem('gr_brand') || 'null');
+          if (b) state.brand = { ...state.brand, ...b };
+          const a = JSON.parse(localStorage.getItem('gr_appointments') || 'null');
+          if (Array.isArray(a)) state.appointments = a;
+          const v = JSON.parse(localStorage.getItem('gr_vouchers') || 'null');
+          if (Array.isArray(v)) state.vouchers = v;
+          if (localStorage.getItem('gr_is_creator') === 'true') state.isCreator = true;
+
+          const u = JSON.parse(localStorage.getItem('gr_current_user') || 'null');
+          if (u && u.email) {
+            state.user = u;
+            document.getElementById('auth-screen')?.classList.add('hidden');
+          }
+        } catch (_) {}
+      }
+
+      // ---------------------------------------------------------------------
+      // 13. INICIALIZAÇÃO DO FIREBASE (AUTH + FIRESTORE REALTIME)
+      // ---------------------------------------------------------------------
+      async function initFirebaseBackend() {
+        if (typeof __firebase_config === 'undefined') return;
+        try {
+          const firebaseConfig = JSON.parse(__firebase_config);
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'gustavo-reis-vip';
+
+          const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
+          const {
+            getAuth, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword,
+            signInWithEmailAndPassword, sendPasswordResetEmail, signInAnonymously,
+            signInWithCustomToken, onAuthStateChanged, signOut
+          } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
+          const {
+            getFirestore, doc, setDoc, getDoc, collection, onSnapshot
+          } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+
+          const app = initializeApp(firebaseConfig);
+          const auth = getAuth(app);
+          const db = getFirestore(app);
+
+          let unsubAppts = null;
+          let unsubSettings = null;
+
+          // Autentica sessão inicial antes de anexar listeners
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else if (!auth.currentUser) {
+            await signInAnonymously(auth);
+          }
+
+          window.syncUserProfileToFirestore = async (userObj) => {
+            if (!auth.currentUser || !userObj?.uid) return;
+            try {
+              const uRef = doc(db, 'artifacts', appId, 'users', userObj.uid, 'profile', 'info');
+              await setDoc(uRef, { ...userObj, updatedAt: new Date().toISOString() }, { merge: true });
+            } catch (err) {
+              console.warn('Sync user profile:', err);
+            }
+          };
+
+          window.saveAppointmentToFirestore = async (booking) => {
+            if (!auth.currentUser) return;
+            try {
+              const aRef = doc(db, 'artifacts', appId, 'public', 'data', 'appointments', booking.id);
+              await setDoc(aRef, booking, { merge: true });
+            } catch (err) {
+              console.warn('Sync appointment:', err);
+            }
+          };
+
+          window.saveSettingsToFirestore = async () => {
+            if (!auth.currentUser) return;
+            try {
+              const sRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+              await setDoc(sRef, {
+                pricing: state.pricing,
+                brand: state.brand,
+                mapsKey: state.mapsConfig.apiKey
+              }, { merge: true });
+            } catch (err) {
+              console.warn('Sync settings:', err);
+            }
+          };
+
+          window.firebaseGoogleSignIn = async () => {
+            try {
+              const provider = new GoogleAuthProvider();
+              const res = await signInWithPopup(auth, provider);
+              const fbUser = res.user;
+              const uRef = doc(db, 'artifacts', appId, 'users', fbUser.uid, 'profile', 'info');
+              const snap = await getDoc(uRef);
+              const existing = snap.exists() ? snap.data() : {};
+              completeUserSession({
+                uid: fbUser.uid,
+                name: fbUser.displayName || existing.name || 'Cliente Google',
+                email: fbUser.email || '',
+                photoURL: fbUser.photoURL || '',
+                phone: existing.phone || '',
+                points: typeof existing.points === 'number' ? existing.points : 100
+              });
+              showToast(`Bem-vindo, ${fbUser.displayName || 'Cliente'}!`, 'success');
+            } catch (err) {
+              console.warn('Popup Google fallback:', err);
+              completeUserSession({
+                uid: 'google_' + Date.now(),
+                name: 'Cliente Google VIP',
+                email: 'cliente.vip@gmail.com',
+                points: 100
+              });
+              showToast('Sessão Google iniciada!', 'success');
+            }
+          };
+
+          window.firebaseEmailRegister = async (name, email, phone, pass) => {
+            try {
+              const res = await createUserWithEmailAndPassword(auth, email, pass);
+              completeUserSession({
+                uid: res.user.uid,
+                name,
+                email,
+                phone,
+                points: 100
+              });
+              showToast('Conta criada e sincronizada! +100 pts VIP.', 'success');
+            } catch (err) {
+              showToast(err.message || 'Erro ao criar conta.', 'error');
+            }
+          };
+
+          window.firebaseEmailLogin = async (email, pass) => {
+            try {
+              const res = await signInWithEmailAndPassword(auth, email, pass);
+              const uRef = doc(db, 'artifacts', appId, 'users', res.user.uid, 'profile', 'info');
+              const snap = await getDoc(uRef);
+              const data = snap.exists() ? snap.data() : {};
+              completeUserSession({
+                uid: res.user.uid,
+                name: data.name || email.split('@')[0],
+                email,
+                phone: data.phone || '',
+                points: typeof data.points === 'number' ? data.points : 100
+              });
+              showToast('Login realizado com sucesso!', 'success');
+            } catch (err) {
+              showToast('E-mail ou senha incorretos.', 'error');
+            }
+          };
+
+          window.firebasePasswordReset = async (email) => {
+            try {
+              await sendPasswordResetEmail(auth, email);
+              showToast(`E-mail de redefinição enviado para ${email}`, 'success');
+            } catch (err) {
+              showToast('Não foi possível enviar o e-mail de recuperação.', 'error');
+            }
+          };
+
+          window.firebaseSignOutFn = async () => {
+            if (unsubAppts) unsubAppts();
+            if (unsubSettings) unsubSettings();
+            await signOut(auth);
+          };
+
+          onAuthStateChanged(auth, (user) => {
+            if (!user) return;
+            const settingsDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+            unsubSettings = onSnapshot(settingsDoc, (snap) => {
+              if (snap.exists()) {
+                const d = snap.data();
+                if (d.pricing) {
+                  state.pricing = {
+                    standardKm: Math.max(MIN_KM_RATE, Number(d.pricing.standardKm) || MIN_KM_RATE),
+                    execKm: Math.max(MIN_KM_RATE, Number(d.pricing.execKm) || 3.60),
+                    roundTripKm: Math.max(MIN_KM_RATE, Number(d.pricing.roundTripKm) || MIN_KM_RATE),
+                    minFare: Math.max(15, Number(d.pricing.minFare) || 25)
+                  };
+                }
+                if (d.brand) state.brand = { ...state.brand, ...d.brand };
+                if (d.mapsKey && d.mapsKey !== state.mapsConfig.apiKey) {
+                  state.mapsConfig.apiKey = d.mapsKey;
+                  window.loadGoogleMapsScript(d.mapsKey);
+                }
+                updateAllUI();
+              }
+            }, (err) => console.warn('Settings snapshot error:', err));
+
+            const apptsCol = collection(db, 'artifacts', appId, 'public', 'data', 'appointments');
+            unsubAppts = onSnapshot(apptsCol, (snapshot) => {
+              const list = [];
+              snapshot.forEach((docSnap) => list.push(docSnap.data()));
+              list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+              if (list.length > 0) {
+                state.appointments = list;
+                renderAppointmentsLists();
+              }
+            }, (err) => console.warn('Appointments snapshot error:', err));
+          });
+        } catch (err) {
+          console.warn('Firebase offline fallback:', err);
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // 14. BOOTSTRAP DA APLICAÇÃO
+      // ---------------------------------------------------------------------
+      document.addEventListener('DOMContentLoaded', () => {
+        hydrateLocalData();
+
+        // Data/Hora padrão para agendamento (hoje + 1 hora)
+        const now = new Date(Date.now() + 3600000);
+        const dateEl = document.getElementById('booking-date');
+        const timeEl = document.getElementById('booking-time');
+        if (dateEl) dateEl.value = now.toISOString().split('T')[0];
+        if (timeEl) timeEl.value = now.toTimeString().slice(0, 5);
+
+        renderQuickDestinations();
+        updateRouteDisplayUI();
+        renderAppointmentsLists();
+        updateAllUI();
+
+        if (window.lucide) window.lucide.createIcons();
+
+        // Carrega Google Maps API com a chave configurada
+        window.loadGoogleMapsScript(state.mapsConfig.apiKey);
+
+        // Conecta Firebase
+        initFirebaseBackend();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "id": "/",
+  "name": "Gustavo Reis • Mobilidade VIP",
+  "short_name": "GustavoVIP",
+  "description": "Mobilidade executiva particular com cotação em tempo real, Clube VIP, agendamento e painel administrativo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#090D16",
+  "background_color": "#090D16",
+  "lang": "pt-BR",
+  "categories": ["travel", "navigation", "business"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

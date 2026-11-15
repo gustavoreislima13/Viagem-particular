@@ -1,0 +1,6 @@
+{
+  "name": "Gustavo Reis • Mobilidade Particular & Clube VIP",
+  "description": "Aplicativo de mobilidade particular e Clube VIP Gustavo Reis com cotação em tempo real, trânsito ao vivo, agendamento e painel administrativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
